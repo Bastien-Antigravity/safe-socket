@@ -12,14 +12,15 @@ go get github.com/Bastien-Antigravity/safe-socket
 
 -   **Modular Transports**: Framed TCP, UDP, Shared Memory (Ring Buffer).
 -   **Profiles**: Pre-configured connection strategies (e.g., `tcp-hello`, `tcp`).
--   **Reliability**: Optimized buffers (4MB for UDP) and strict deadline enforcement.
+-   **Lifecycle Management**: Explicit `Open()` and `Close()` methods via the `Socket` interface.
+-   **Reliability**: Optimized buffers and strict deadline enforcement.
 -   **Protocols**: Pluggable protocol execution (Handshake/KeepAlive).
 
 ## Usage
 
 ### Simple Connection
 
-Use `safesocket.Create` for a zero-boilerplate experience.
+Use `safesocket.Create` for a zero-boilerplate experience. This returns an **already opened** `Socket` interface.
 
 ```go
 package main
@@ -28,34 +29,44 @@ import (
 	"log"
 
 	"github.com/Bastien-Antigravity/safe-socket"
-	"github.com/Bastien-Antigravity/safe-socket/src/schemas"
 )
 
 func main() {
     // Connect using the 'tcp-hello' profile
-    // 1. Profile Name
-    // 2. Destination Address
-    // 3. Your Public IP (for protocol handshake)
+    // Returns a Socket interface
 	client, err := safesocket.Create("tcp-hello", "127.0.0.1:8081", "203.0.113.10")
 	if err != nil {
 		log.Fatalf("Failed to connect: %v", err)
 	}
 	defer client.Close()
 
-	// Send a Message (Protobuf)
-	msg := &schemas.HelloMsg{
-		Name: "Alice",
-		Host: "localhost",
-	}
-	if err := client.Send(msg); err != nil {
+	// Send raw data
+	data := []byte("Hello Safe Socket")
+	if err := client.Send(data); err != nil {
 		log.Printf("Send error: %v", err)
 	}
 
-    // Receive a Message
-    var response schemas.HelloMsg
-    if err := client.Receive(&response); err != nil {
+    // Receive raw data
+    buf := make([]byte, 1024)
+    n, err := client.Receive(buf)
+    if err != nil {
         log.Printf("Receive error: %v", err)
     }
+    log.Printf("Received: %s", string(buf[:n]))
+}
+```
+
+### Advanced Lifecycle (Reconnection)
+
+Since `Socket` is a facade, you can Close and Re-open the connection without recreating the object.
+
+```go
+// Close the current connection
+client.Close()
+
+// Re-open using the same profile configuration
+if err := client.Open(); err != nil {
+    log.Fatalf("Reconnect failed: %v", err)
 }
 ```
 
