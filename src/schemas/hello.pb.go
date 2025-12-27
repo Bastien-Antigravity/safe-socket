@@ -7,12 +7,11 @@
 package schemas
 
 import (
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
-
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
@@ -99,7 +98,7 @@ const file_src_schemas_hello_proto_rawDesc = "" +
 	"\x04Name\x18\x01 \x01(\tR\x04Name\x12\x12\n" +
 	"\x04Host\x18\x02 \x01(\tR\x04Host\x12\x18\n" +
 	"\aAddress\x18\x03 \x01(\tR\aAddress\x12\x1a\n" +
-	"\bPublicIP\x18\x04 \x01(\tR\bPublicIPB1Z/github.com/Bastien-Antigravity/safe-socket/src/schemasb\x06proto3"
+	"\bPublicIP\x18\x04 \x01(\tR\bPublicIPB8Z6github.com/Bastien-Antigravity/safe-socket/src/schemasb\x06proto3"
 
 var (
 	file_src_schemas_hello_proto_rawDescOnce sync.Once
