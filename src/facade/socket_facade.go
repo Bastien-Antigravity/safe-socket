@@ -1,8 +1,6 @@
 package facade
 
 import (
-	"google.golang.org/protobuf/proto"
-
 	"github.com/Bastien-Antigravity/safe-socket/src/interfaces"
 	"github.com/Bastien-Antigravity/safe-socket/src/models"
 )
@@ -25,33 +23,18 @@ func NewSocketFacade(p interfaces.SocketProfile, t interfaces.TransportConnectio
 
 // -----------------------------------------------------------------------------
 
-// Send marshals the payload using Protobuf and writes it to the transport.
-func (c *SocketFacade) Send(payload proto.Message) error {
-	data, err := proto.Marshal(payload)
-	if err != nil {
-		return err
-	}
-
-	_, err = c.transport.Write(data)
+// Send writes the raw data to the transport.
+func (c *SocketFacade) Send(data []byte) error {
+	_, err := c.transport.Write(data)
 	return err
 }
 
 // -----------------------------------------------------------------------------
 
-// Receive reads one message from the transport and deserializes it into v (which must be a proto.Message).
-func (c *SocketFacade) Receive(v proto.Message) error {
-	// We need a buffer to read the data.
-	// For simplicity, we allocate a buffer. In a high-perf scenario, we'd reuse or stream.
-	// Assuming max message size 1MB for safety.
-	buf := make([]byte, 1024*1024)
-
-	n, err := c.transport.Read(buf)
-	if err != nil {
-		return err
-	}
-
-	// Deserialize just the read portion
-	return proto.Unmarshal(buf[:n], v)
+// Receive reads from the transport into the provided buffer.
+// It returns the number of bytes read and any error encountered.
+func (c *SocketFacade) Receive(buf []byte) (int, error) {
+	return c.transport.Read(buf)
 }
 
 // -----------------------------------------------------------------------------
