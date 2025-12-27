@@ -1,7 +1,6 @@
 package safesocket
 
 import (
-	"github.com/Bastien-Antigravity/safe-socket/src/facade"
 	"github.com/Bastien-Antigravity/safe-socket/src/factory"
 	"github.com/Bastien-Antigravity/safe-socket/src/interfaces"
 	"github.com/Bastien-Antigravity/safe-socket/src/models"
@@ -11,13 +10,13 @@ import (
 const Version = "1.0.0"
 
 // Socket is an alias for the Facade to simplify usage.
-type Socket = facade.SocketFacade
+type Socket = interfaces.Socket
 
 // Create creates a new safe-socket connection using a named profile.
 // profileName: "tcp-hello", "tcp"
 // address: destination address (e.g., "127.0.0.1:8080")
 // publicIP: your public IP (for handshake protocols)
-func Create(profileName, address, publicIP string) (*Socket, error) {
+func Create(profileName, address, publicIP string) (Socket, error) {
 	// We delegate to the factory, but we need to ensure the factory implementation
 	// is accessible and works with the types we expose if needed.
 	// Since factory returns *facade.SocketFacade, and Socket is an alias, this works.
