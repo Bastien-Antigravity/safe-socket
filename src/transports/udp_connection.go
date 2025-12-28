@@ -3,16 +3,17 @@ package transports
 import (
 	"net"
 	"time"
-
-	"github.com/Bastien-Antigravity/safe-socket/src/interfaces"
 )
 
 // UdpSocket implements interfaces.TransportConnection over UDP.
 // Note: UDP is unreliable and unordered.
-// -----------------------------------------------------------------------------
 type UdpSocket struct {
 	Conn    *net.UDPConn
 	Timeout time.Duration
+
+	// Server-Side: "Transient" socket fields
+	RemoteAddr *net.UDPAddr // If set, Write() uses WriteToUDP
+	RecvBuf    []byte       // If set, Read() returns this buffer first (one-shot)
 }
 
 // -----------------------------------------------------------------------------
@@ -24,29 +25,14 @@ func NewUdpSocket(conn *net.UDPConn, timeout time.Duration) *UdpSocket {
 	}
 }
 
-// -----------------------------------------------------------------------------
-
-// ConnectUDP creates a UDP connection.
-// Note: UDP is connectionless. "Dial" just sets the default destination address.
-func ConnectUDP(address string, timeout time.Duration) (interfaces.TransportConnection, error) {
-	// Resolve address
-	udpAddr, err := net.ResolveUDPAddr("udp", address)
-	if err != nil {
-		return nil, err
+// NewTransientUdpSocket creates a socket representing a single packet from a sender.
+func NewTransientUdpSocket(conn *net.UDPConn, addr *net.UDPAddr, data []byte, timeout time.Duration) *UdpSocket {
+	return &UdpSocket{
+		Conn:       conn,
+		Timeout:    timeout,
+		RemoteAddr: addr,
+		RecvBuf:    data,
 	}
-
-	// Dial (connect) to setting the default remote address
-	conn, err := net.DialUDP("udp", nil, udpAddr)
-	if err != nil {
-		return nil, err
-	}
-
-	// Reliability: Increase OS buffers to reduce packet drops
-	// 4MB buffers (adjust based on needs/OS limits)
-	_ = conn.SetReadBuffer(4 * 1024 * 1024)
-	_ = conn.SetWriteBuffer(4 * 1024 * 1024)
-
-	return NewUdpSocket(conn, timeout), nil
 }
 
 // -----------------------------------------------------------------------------
@@ -54,13 +40,17 @@ func ConnectUDP(address string, timeout time.Duration) (interfaces.TransportConn
 // Write sends a datagram.
 // Warning: Messages larger than MTU (usually 1500 bytes) will be fragmented.
 // Messages larger than 64KB will fail.
-// Write sends a datagram.
-// Warning: Messages larger than MTU (usually 1500 bytes) will be fragmented.
-// Messages larger than 64KB will fail.
 func (s *UdpSocket) Write(p []byte) (n int, err error) {
 	if s.Timeout > 0 {
 		_ = s.Conn.SetWriteDeadline(time.Now().Add(s.Timeout))
 	}
+
+	// If this is a transient server socket, reply to the specific remote address
+	if s.RemoteAddr != nil {
+		return s.Conn.WriteToUDP(p, s.RemoteAddr)
+	}
+
+	// Otherwise, use standard Write (client-side connected socket)
 	return s.Conn.Write(p)
 }
 
@@ -69,6 +59,13 @@ func (s *UdpSocket) Write(p []byte) (n int, err error) {
 // Read reads a datagram.
 // Note: If 'p' is smaller than the incoming datagram, the excess data is discarded by the OS.
 func (s *UdpSocket) Read(p []byte) (n int, err error) {
+	// If we have a pre-read buffer (Transient Server Socket), return it immediately
+	if s.RecvBuf != nil {
+		n := copy(p, s.RecvBuf)
+		s.RecvBuf = nil // consumed
+		return n, nil
+	}
+
 	if s.Timeout > 0 {
 		_ = s.Conn.SetReadDeadline(time.Now().Add(s.Timeout))
 	}

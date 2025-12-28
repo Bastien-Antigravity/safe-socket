@@ -12,22 +12,38 @@ const Version = "1.1.0"
 // Socket is an alias for the Facade to simplify usage.
 type Socket = interfaces.Socket
 
+// SocketType defines the role of the socket (Client or Server).
+type SocketType = interfaces.SocketType
+
+const (
+	SocketTypeClient = interfaces.SocketTypeClient
+	SocketTypeServer = interfaces.SocketTypeServer
+)
+
+// -----------------------------------------------------------------------------
+
 // Create creates a new safe-socket connection using a named profile.
-// profileName: "tcp-hello", "tcp"
-// address: destination address (e.g., "127.0.0.1:8080")
-// publicIP: your public IP (for handshake protocols)
-func Create(profileName, address, publicIP string) (Socket, error) {
-	// We delegate to the factory, but we need to ensure the factory implementation
-	// is accessible and works with the types we expose if needed.
-	// Since factory returns *facade.SocketFacade, and Socket is an alias, this works.
-	return factory.Create(profileName, address, publicIP)
+//
+// Parameters:
+//   - profileName: "tcp", "tcp-hello", "udp", "udp-hello", "shm", "shm-hello"
+//   - address: destination address ("IP:Port" or "FilePath" for SHM)
+//   - publicIP: your public IP (Required for "hello" protocols)
+//   - socketType: SocketTypeClient or SocketTypeServer
+//   - autoConnect: if true, immediately calls Open() / Listen()
+func Create(profileName, address, publicIP string, socketType SocketType, autoConnect bool) (Socket, error) {
+	// We delegate to the factory
+	return factory.Create(profileName, address, publicIP, socketType, autoConnect)
 }
+
+// -----------------------------------------------------------------------------
 
 // Expose other useful types if necessary
 type SocketConfig = models.SocketConfig
 type SocketProfile = interfaces.SocketProfile
 type TransportType = interfaces.TransportType
 type ProtocolType = interfaces.ProtocolType
+
+// -----------------------------------------------------------------------------
 
 // Explicitly export Transport/Protocol constants via variables or just let users import interfaces?
 // For a simple lib, letting them import "https://github.com/toto1234567890/safe-socket/src/interfaces" is okay,
@@ -36,4 +52,5 @@ type ProtocolType = interfaces.ProtocolType
 const (
 	TransportFramedTCP = interfaces.TransportFramedTCP
 	TransportUDP       = interfaces.TransportUDP
+	TransportSHM       = interfaces.TransportShm
 )

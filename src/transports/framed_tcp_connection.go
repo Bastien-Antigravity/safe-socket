@@ -5,8 +5,6 @@ import (
 	"io"
 	"net"
 	"time"
-
-	"github.com/Bastien-Antigravity/safe-socket/src/interfaces"
 )
 
 // FramedTCPSocket implements interfaces.TransportConnection.
@@ -27,14 +25,39 @@ func NewFramedTCPSocket(conn net.Conn, timeout time.Duration) *FramedTCPSocket {
 
 // -----------------------------------------------------------------------------
 
-// Connect dialer helper for FramedTCPSocket.
-func Connect(address string, timeout time.Duration) (interfaces.TransportConnection, error) {
-	conn, err := net.DialTimeout("tcp", address, timeout)
-	if err != nil {
-		return nil, err
+// SetKeepAlive enables TCP keepalive with the specified period.
+func (s *FramedTCPSocket) SetKeepAlive(period time.Duration) error {
+	if tcpConn, ok := s.Conn.(*net.TCPConn); ok {
+		if err := tcpConn.SetKeepAlive(true); err != nil {
+			return err
+		}
+		return tcpConn.SetKeepAlivePeriod(period)
 	}
-	// Note: We deliberately use the 'timeout' for both connection AND subsequent read/writes
-	return NewFramedTCPSocket(conn, timeout), nil
+	return nil
+}
+
+// SetNoDelay controls Nagle's algorithm (true = disable Nagle, lower latency).
+func (s *FramedTCPSocket) SetNoDelay(enabled bool) error {
+	if tcpConn, ok := s.Conn.(*net.TCPConn); ok {
+		return tcpConn.SetNoDelay(enabled)
+	}
+	return nil
+}
+
+// SetReadBuffer sets the size of the operating system's receive buffer.
+func (s *FramedTCPSocket) SetReadBuffer(bytes int) error {
+	if tcpConn, ok := s.Conn.(*net.TCPConn); ok {
+		return tcpConn.SetReadBuffer(bytes)
+	}
+	return nil
+}
+
+// SetWriteBuffer sets the size of the operating system's transmit buffer.
+func (s *FramedTCPSocket) SetWriteBuffer(bytes int) error {
+	if tcpConn, ok := s.Conn.(*net.TCPConn); ok {
+		return tcpConn.SetWriteBuffer(bytes)
+	}
+	return nil
 }
 
 // -----------------------------------------------------------------------------

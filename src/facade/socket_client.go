@@ -10,7 +10,10 @@ import (
 	"github.com/Bastien-Antigravity/safe-socket/src/transports"
 )
 
-type SocketFacade struct {
+// SocketClient implements the interfaces.Socket interface for Client-side operations.
+// It handles establishing connections (Open), sending/receiving data, and protocol handshakes.
+// Server-side methods (Listen, Accept) will return errors.
+type SocketClient struct {
 	Profile   interfaces.SocketProfile
 	Config    models.SocketConfig
 	transport interfaces.TransportConnection
@@ -18,8 +21,8 @@ type SocketFacade struct {
 
 // -----------------------------------------------------------------------------
 
-func NewSocketFacade(p interfaces.SocketProfile, c models.SocketConfig) *SocketFacade {
-	return &SocketFacade{
+func NewSocketClient(p interfaces.SocketProfile, c models.SocketConfig) *SocketClient {
+	return &SocketClient{
 		Profile: p,
 		Config:  c,
 	}
@@ -28,7 +31,7 @@ func NewSocketFacade(p interfaces.SocketProfile, c models.SocketConfig) *SocketF
 // -----------------------------------------------------------------------------
 
 // Open establishes the connection using the configured transport and protocol.
-func (c *SocketFacade) Open() error {
+func (c *SocketClient) Open() error {
 	if c.transport != nil {
 		return errors.New("socket already open")
 	}
@@ -58,13 +61,25 @@ func (c *SocketFacade) Open() error {
 		return err
 	}
 
-	// 2. Perform Protocol (if specified)
-	if c.Profile.GetProtocol() != "" && c.Profile.GetProtocol() != interfaces.ProtocolNone {
+	// 2. Encapsulation / Handshake Logic
+	// Case A: UDP + Hello (Stateless Envelope)
+	if c.Profile.GetTransport() == interfaces.TransportUDP &&
+		c.Profile.GetProtocol() == interfaces.ProtocolHello {
+
+		// Wrap connection to handle Per-Packet Encapsulation
+		conn = NewEnvelopedConnection(conn, c.Profile, c.Config)
+
+		// No initial handshake packet sent here.
+		// The first Send() will carry the identity.
+
+	} else if c.Profile.GetProtocol() != "" && c.Profile.GetProtocol() != interfaces.ProtocolNone {
+		// Case B: Connection-Oriented (TCP/SHM) + Hello
+		// Perform Standard Handshake
 		var proto interfaces.Protocol
 		// Currently only one protocol supported
 		proto = protocols.NewHelloProtocol()
 
-		if err := proto.Execute(conn, c.Profile, c.Config); err != nil {
+		if err := proto.Initiate(conn, c.Profile, c.Config); err != nil {
 			conn.Close()
 			return err
 		}
@@ -77,7 +92,7 @@ func (c *SocketFacade) Open() error {
 // -----------------------------------------------------------------------------
 
 // Send writes the raw data to the transport.
-func (c *SocketFacade) Send(data []byte) error {
+func (c *SocketClient) Send(data []byte) error {
 	if c.transport == nil {
 		return errors.New("socket not open")
 	}
@@ -89,7 +104,7 @@ func (c *SocketFacade) Send(data []byte) error {
 
 // Receive reads from the transport into the provided buffer.
 // It returns the number of bytes read and any error encountered.
-func (c *SocketFacade) Receive(buf []byte) (int, error) {
+func (c *SocketClient) Receive(buf []byte) (int, error) {
 	if c.transport == nil {
 		return 0, errors.New("socket not open")
 	}
@@ -98,11 +113,23 @@ func (c *SocketFacade) Receive(buf []byte) (int, error) {
 
 // -----------------------------------------------------------------------------
 
-func (c *SocketFacade) Close() error {
+func (c *SocketClient) Close() error {
 	if c.transport != nil {
 		err := c.transport.Close()
 		c.transport = nil
 		return err
 	}
 	return nil
+}
+
+// -----------------------------------------------------------------------------
+// Server Methods (Not Supported for Client)
+// -----------------------------------------------------------------------------
+
+func (c *SocketClient) Listen() error {
+	return errors.New("method Listen not supported for Client socket")
+}
+
+func (c *SocketClient) Accept() (interfaces.TransportConnection, error) {
+	return nil, errors.New("method Accept not supported for Client socket")
 }

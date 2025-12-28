@@ -1,0 +1,87 @@
+package facade
+
+import (
+	"errors"
+
+	"github.com/Bastien-Antigravity/safe-socket/src/interfaces"
+	"github.com/Bastien-Antigravity/safe-socket/src/models"
+	"github.com/Bastien-Antigravity/safe-socket/src/protocols"
+)
+
+// EnvelopedConnection wraps a real TransportConnection.
+// It uses HelloProtocol to:
+// - Encapsulate outgoing data (Write -> Wrapped HelloMsg)
+// - Decapsulate incoming data (Read Wrapped HelloMsg -> Payload)
+type EnvelopedConnection struct {
+	Conn    interfaces.TransportConnection
+	Profile interfaces.SocketProfile
+	Config  models.SocketConfig
+	Proto   *protocols.HelloProtocol // Casted for access to Encapsulate/Decapsulate
+}
+
+// -----------------------------------------------------------------------------
+
+func NewEnvelopedConnection(conn interfaces.TransportConnection, p interfaces.SocketProfile, c models.SocketConfig) *EnvelopedConnection {
+	return &EnvelopedConnection{
+		Conn:    conn,
+		Profile: p,
+		Config:  c,
+		Proto:   protocols.NewHelloProtocol().(*protocols.HelloProtocol),
+	}
+}
+
+// -----------------------------------------------------------------------------
+
+func (e *EnvelopedConnection) Write(p []byte) (n int, err error) {
+	// 1. Encapsulate Data into HelloMsg
+	wrappedData, err := e.Proto.Encapsulate(p, e.Profile, e.Config)
+	if err != nil {
+		return 0, err
+	}
+
+	// 2. Write wrapped data to underlying transport
+	// Note: We return len(p) to pretend we wrote the user's data, not the overhead size
+	_, err = e.Conn.Write(wrappedData)
+	if err != nil {
+		return 0, err
+	}
+
+	return len(p), nil
+}
+
+// -----------------------------------------------------------------------------
+
+func (e *EnvelopedConnection) Read(p []byte) (n int, err error) {
+	// 1. Read wrapped packet from underlying transport
+	// We need a buffer big enough for the Envelope + Payload.
+	// 4KB default should cover most UDP MTUs + Overhead.
+	rawBuf := make([]byte, 8192)
+	nRaw, err := e.Conn.Read(rawBuf)
+	if err != nil {
+		return 0, err
+	}
+
+	// 2. Decapsulate
+	payload, identity, err := e.Proto.Decapsulate(rawBuf[:nRaw])
+	if err != nil {
+		return 0, err
+	}
+
+	// Note: We could expose 'identity' (Name, IP) here if we had a way.
+	// For now, we just verify it decodes correctly.
+	_ = identity
+
+	// 3. Copy Payload to user buffer
+	if len(payload) > len(p) {
+		return 0, errors.New("short buffer")
+	}
+	copy(p, payload)
+
+	return len(payload), nil
+}
+
+// -----------------------------------------------------------------------------
+
+func (e *EnvelopedConnection) Close() error {
+	return e.Conn.Close()
+}

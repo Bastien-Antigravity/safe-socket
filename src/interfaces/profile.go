@@ -13,8 +13,8 @@ const (
 type ProtocolType string
 
 const (
-	ProtocolNone     ProtocolType = "None"
-	ProtocolSayHello ProtocolType = "SayHello"
+	ProtocolNone  ProtocolType = "none"
+	ProtocolHello ProtocolType = "hello"
 )
 
 // SocketProfile defines the behavior for a connection strategy.

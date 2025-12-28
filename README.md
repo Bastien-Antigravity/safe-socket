@@ -1,6 +1,9 @@
 # Safe Socket
 
-**Safe Socket** is a high-performance, ultra-low-latency socket library for Go. It provides a reliable abstraction over TCP, UDP, and Shared Memory transports with a flexible profile-based configuration.
+**Safe Socket** is a high-performance, robust socket library for Go. It provides a reliable abstraction over **TCP**, **UDP**, and **Shared Memory (SHM)** transports with a flexible, profile-based configuration system.
+
+## Version
+Current Version: `v1.1.0`
 
 ## Installation
 
@@ -10,83 +13,96 @@ go get github.com/Bastien-Antigravity/safe-socket
 
 ## Features
 
--   **Modular Transports**: Framed TCP, UDP, Shared Memory (Ring Buffer).
--   **Profiles**: Pre-configured connection strategies (e.g., `tcp-hello`, `tcp`).
--   **Lifecycle Management**: Explicit `Open()` and `Close()` methods via the `Socket` interface.
--   **Reliability**: Optimized buffers and strict deadline enforcement.
--   **Protocols**: Pluggable protocol execution (Handshake/KeepAlive).
+-   **Modular Transports**:
+    -   **Framed TCP**: Reliable, persistent connections with message framing.
+    -   **UDP**: High-speed, connectionless communication with optional reliability layers.
+    -   **Shared Memory (SHM)**: Ultra-low latency IPC for local processes using memory-mapped files (Ring Buffer).
+-   **Intelligent Protocols**:
+    -   **Hello Protocol**: Identity exchange handshake.
+    -   **Stateless Envelope (UDP)**: Zero-handshake authentication where every packet carries the sender's identity and payload.
+-   **Unified Facade**: Interact with any transport using `Open()`, `Close()`, `Send()`, `Receive()`, and `Accept()`.
 
 ## Usage
 
-### Simple Connection
+### Zero-Boilerplate Creation
 
-Use `safesocket.Create` for a zero-boilerplate experience. This returns an **already opened** `Socket` interface.
+Use `safesocket.Create` to instantiate and connect in one line.
 
 ```go
 package main
 
 import (
-	"log"
-
-	"github.com/Bastien-Antigravity/safe-socket"
+    "log"
+    "github.com/Bastien-Antigravity/safe-socket"
 )
 
 func main() {
-    // Connect using the 'tcp-hello' profile
-    // Returns a Socket interface
-	client, err := safesocket.Create("tcp-hello", "127.0.0.1:8081", "203.0.113.10")
-	if err != nil {
-		log.Fatalf("Failed to connect: %v", err)
-	}
-	defer client.Close()
-
-	// Send raw data
-	data := []byte("Hello Safe Socket")
-	if err := client.Send(data); err != nil {
-		log.Printf("Send error: %v", err)
-	}
-
-    // Receive raw data
-    buf := make([]byte, 1024)
-    n, err := client.Receive(buf)
+    // Example: Connect to a server using TCP with Hello Handshake
+    // publicIP is required for the handshake identity.
+    socket, err := safesocket.Create("tcp-hello", "127.0.0.1:9000", "192.168.1.50", safesocket.SocketTypeClient, true)
     if err != nil {
-        log.Printf("Receive error: %v", err)
+        log.Fatal(err)
     }
+    defer socket.Close()
+
+    // Send Data
+    socket.Send([]byte("Hello Server!"))
+
+    // Receive Data
+    buf := make([]byte, 1024)
+    n, _ := socket.Read(buf)
     log.Printf("Received: %s", string(buf[:n]))
-}
-```
-
-### Advanced Lifecycle (Reconnection)
-
-Since `Socket` is a facade, you can Close and Re-open the connection without recreating the object.
-
-```go
-// Close the current connection
-client.Close()
-
-// Re-open using the same profile configuration
-if err := client.Open(); err != nil {
-    log.Fatalf("Reconnect failed: %v", err)
 }
 ```
 
 ### Supported Profiles
 
-| Profile Name | Transport | Protocol | Description |
-| :--- | :--- | :--- | :--- |
-| `"tcp-hello"` | TCP (Framed) | SayHello | Establishes connection and performs a Hello handshake. |
-| `"tcp"` | TCP (Framed) | None | Raw persistent TCP connection. |
+| Profile | Transport | Protocol | Address Format | Behavior |
+| :--- | :--- | :--- | :--- | :--- |
+| `"tcp"` | TCP | None | `IP:Port` | Raw TCP stream. |
+| `"tcp-hello"` | TCP | Hello | `IP:Port` | TCP + Identity Handshake. |
+| `"udp"` | UDP | None | `IP:Port` | Raw UDP packets. |
+| `"udp-hello"` | UDP | Hello | `IP:Port` | **Stateless Envelope**: Wraps every packet with Identity + Payload. |
+| `"shm"` | SHM | None | File Path | Raw Memory Mapped File. |
+| `"shm-hello"` | SHM | Hello | File Path | SHM + Identity Handshake. |
 
-## Configuration
+### Protocol Details
 
-The library uses a default connection timeout of **5 seconds**. This can be customized by using the `SocketProfile` interface directly if you need advanced configuration.
+-   **Hello Handshake (TCP/SHM)**: Upon connection, the client sends a `HelloMsg` (Name, Host, IP). The server verifies it before allowing data exchange.
+-   **Stateless Envelope (UDP)**: Since UDP is connectionless, there is no "session". When using `udp-hello`, the library automatically wraps **every** packet in a lightweight `PacketEnvelope` (Sender Name + Payload). The server transparently unwraps this, so implementation code just sees the payload and knows the sender is verified.
+
+## Advanced Usage
+
+### Server Example
+
+```go
+func runServer() {
+    // Create a UDP Server handling enveloped packets
+    server, _ := safesocket.Create("udp-hello", "0.0.0.0:9000", "", safesocket.SocketTypeServer, true)
+    defer server.Close()
+
+    for {
+        // Accept blocks until a packet arrives.
+        // For UDP, this returns a "Transient Socket" representing that specific packet/sender.
+        conn, err := server.Accept()
+        if err != nil { continue }
+
+        go func(c safesocket.Socket) {
+            defer c.Close()
+            
+            // Read the payload (Decapsulation happens automatically)
+            buf := make([]byte, 1024)
+            n, _ := c.Read(buf)
+            
+            // Reply (Encapsulation happens automatically)
+            c.Write([]byte("Message Received: " + string(buf[:n])))
+        }(conn)
+    }
+}
+```
 
 ## Contributing
-
 Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
 
-Project Link: [https://github.com/Bastien-Antigravity/safe-socket](https://github.com/Bastien-Antigravity/safe-socket)
-
 ## License
-
 [MIT](https://choosealicense.com/licenses/mit/)
