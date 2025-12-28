@@ -1,7 +1,7 @@
 # Research: Low-Latency Cross-Language Execution via Shared Memory
 
 ## Goal
-Enable a "Provider" process (e.g., Server) to write data to Shared Memory and **instantly trigger** code execution in a "Consumer" process (e.g., Client), minimizing jitter and OS context switching overhead. The focus is on interoperability between languages (Go, C, C++, Python, ASM).
+Enable a "Provider" process (e.g., Server) to write data to Shared Memory and **instantly trigger** code execution in a "Consumer" process (e.g., Client), minimizing jitter and OS context switching overhead. The focus is on interoperability between languages (Go, C, C++, Python, ASM, Rust).
 
 ## Research Avenues
 
