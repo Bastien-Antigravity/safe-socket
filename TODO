@@ -1,0 +1,10 @@
+# Research: Cross-Language SHM Event Triggering
+
+Goal: Enable a process (Server) to write data to Shared Memory and immediately trigger a specific function or the main loop in a target process (Client), even if they are written in different languages (e.g., Go <-> C++/Python).
+
+Challenges:
+- Raw function pointers cannot be shared or executed across different process address spaces or runtimes.
+
+Proposed Research:
+- Investigate IPC Signaling mechanisms (System Semaphores, Named Pipes, EventFD) to provide the "Trigger" capability alongside the SHM "Data" capability.
+- Design a language-agnostic "Event Protocol" where the client registers a local callback that is invoked when the SHM signal is received.
