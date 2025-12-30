@@ -7,7 +7,7 @@ import (
 )
 
 // Version defines the current library version.
-const Version = "1.1.0"
+const Version = "1.1.1"
 
 // Socket is an alias for the Facade to simplify usage.
 type Socket = interfaces.Socket
