@@ -119,6 +119,10 @@ func (s *SocketServer) Send(data []byte) error {
 	return errors.New("method Send not supported for Server socket")
 }
 
+func (s *SocketServer) Write(data []byte) error {
+	return errors.New("method Write not supported for Server socket")
+}
+
 func (s *SocketServer) Receive(buf []byte) (int, error) {
 	return 0, errors.New("method Receive not supported for Server socket")
 }

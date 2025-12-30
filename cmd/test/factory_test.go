@@ -93,6 +93,65 @@ func TestTCP_Raw(t *testing.T) {
 	}
 }
 
+// TestTCP_Raw_Write_Method Verifies the new Write() method (Send alias)
+func TestTCP_Raw_Write_Method(t *testing.T) {
+	addr := "127.0.0.1:9010" // Distinct port
+
+	// 1. Start Server
+	server, err := factory.Create("tcp", addr, "", interfaces.SocketTypeServer, true)
+	if err != nil {
+		t.Fatalf("Failed to create TCP server: %v", err)
+	}
+	defer server.Close()
+
+	errChan := make(chan error, 1)
+	go func() {
+		conn, err := server.Accept()
+		if err != nil {
+			errChan <- fmt.Errorf("Accept failed: %v", err)
+			return
+		}
+		defer conn.Close()
+
+		buf := make([]byte, 1024)
+		n, err := conn.Read(buf)
+		if err != nil {
+			errChan <- fmt.Errorf("Read failed: %v", err)
+			return
+		}
+
+		if string(buf[:n]) != "WRITE_TEST" {
+			errChan <- fmt.Errorf("Unexpected message: %s", string(buf[:n]))
+			return
+		}
+
+		conn.Write([]byte("ACK"))
+		errChan <- nil
+	}()
+
+	// 2. Start Client
+	client, err := factory.Create("tcp", addr, "", interfaces.SocketTypeClient, true)
+	if err != nil {
+		t.Fatalf("Failed to create TCP client: %v", err)
+	}
+	defer client.Close()
+
+	// 3. Use the new Write method (which returns error only)
+	if err := client.Write([]byte("WRITE_TEST")); err != nil {
+		t.Fatalf("Client Write failed: %v", err)
+	}
+
+	// 4. Verify
+	select {
+	case err := <-errChan:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Timeout waiting for write exchange")
+	}
+}
+
 // TestTCP_Hello Verifies TCP with Hello Protocol Handshake
 func TestTCP_Hello(t *testing.T) {
 	addr := "127.0.0.1:9004" // Port 9004
