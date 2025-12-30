@@ -7,18 +7,12 @@ import (
 )
 
 // Version defines the current library version.
-const Version = "1.1.2"
+const Version = "1.2.0"
 
 // Socket is an alias for the Facade to simplify usage.
 type Socket = interfaces.Socket
 
-// SocketType defines the role of the socket (Client or Server).
-type SocketType = interfaces.SocketType
-
-const (
-	SocketTypeClient = interfaces.SocketTypeClient
-	SocketTypeServer = interfaces.SocketTypeServer
-)
+// SocketType aliases removed to simplify API. Use "client" or "server" strings.
 
 // -----------------------------------------------------------------------------
 
@@ -28,9 +22,9 @@ const (
 //   - profileName: "tcp", "tcp-hello", "udp", "udp-hello", "shm", "shm-hello"
 //   - address: destination address ("IP:Port" or "FilePath" for SHM)
 //   - publicIP: your public IP (Required for "hello" protocols)
-//   - socketType: SocketTypeClient or SocketTypeServer
+//   - socketType: "client" or "server"
 //   - autoConnect: if true, immediately calls Open() / Listen()
-func Create(profileName, address, publicIP string, socketType SocketType, autoConnect bool) (Socket, error) {
+func Create(profileName, address, publicIP string, socketType string, autoConnect bool) (Socket, error) {
 	// We delegate to the factory
 	return factory.Create(profileName, address, publicIP, socketType, autoConnect)
 }

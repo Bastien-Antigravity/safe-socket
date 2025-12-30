@@ -22,25 +22,30 @@ import (
 //   - profileName: e.g. "tcp-hello" (currently supported)
 //   - address: destination address to connect to (Client) or bind to (Server) (e.g. "127.0.0.1:8081")
 //   - publicIP: this node's public IP (used for protocol handshake data)
-//   - socketType: interfaces.SocketTypeClient or interfaces.SocketTypeServer
+//   - socketType: "client" or "server" (case-insensitive)
 //   - autoConnect: if true, automatically calls Open() (Client) or Listen() (Server)
 //
 // Returns:
 //
 //	An interfaces.Socket which can be used to Send/Receive (Client) or Accept (Server).
-func Create(profileName, address, publicIP string, socketType interfaces.SocketType, autoConnect bool) (interfaces.Socket, error) {
+func Create(profileName, address, publicIP string, socketType string, autoConnect bool) (interfaces.Socket, error) {
+	st, err := parseSocketType(socketType)
+	if err != nil {
+		return nil, err
+	}
+
 	var p interfaces.SocketProfile
 
 	switch profileName {
 	case "tcp-hello":
 		// Default timeout 5 seconds for library usage
-		if socketType == interfaces.SocketTypeClient {
+		if st == interfaces.SocketTypeClient {
 			p = profiles.NewTcpHelloClientProfile("TcpClient", address, 5000)
 		} else {
 			p = profiles.NewTcpHelloServerProfile("TcpServer", address, 5000)
 		}
 	case "tcp":
-		if socketType == interfaces.SocketTypeClient {
+		if st == interfaces.SocketTypeClient {
 			p = profiles.NewTcpClientProfile("TcpRaw", address, 5000)
 		} else {
 			p = profiles.NewTcpServerProfile("TcpRaw", address, 5000)
@@ -69,18 +74,23 @@ func Create(profileName, address, publicIP string, socketType interfaces.SocketT
 		return CreateOpenSocket(p, config, socketType)
 	}
 
-	return CreateSocket(p, config, socketType), nil
+	return CreateSocket(p, config, socketType)
 }
 
 // -----------------------------------------------------------------------------
 
 // CreateOpenSocket constructs a Socket based on the provided parameters and opens/listens it.
-func CreateOpenSocket(p interfaces.SocketProfile, config models.SocketConfig, socketType interfaces.SocketType) (interfaces.Socket, error) {
+func CreateOpenSocket(p interfaces.SocketProfile, config models.SocketConfig, socketType string) (interfaces.Socket, error) {
 	// 1. Create the Socket facade
-	socket := CreateSocket(p, config, socketType)
+	socket, err := CreateSocket(p, config, socketType)
+	if err != nil {
+		return nil, err
+	}
+
+	st, _ := parseSocketType(socketType) // Already validated if coming from internal flow, but public API needs check
 
 	// 2. Open (Client) or Listen (Server)
-	if socketType == interfaces.SocketTypeClient {
+	if st == interfaces.SocketTypeClient {
 		if err := socket.Open(); err != nil {
 			return nil, err
 		}
@@ -98,9 +108,25 @@ func CreateOpenSocket(p interfaces.SocketProfile, config models.SocketConfig, so
 // CreateSocket constructs a Socket facade based on the provided SocketProfile.
 // It returns the socket in a closed/unlistening state.
 // Useful for connection pools or when deferred connection is required.
-func CreateSocket(p interfaces.SocketProfile, config models.SocketConfig, socketType interfaces.SocketType) interfaces.Socket {
-	if socketType == interfaces.SocketTypeClient {
-		return facade.NewSocketClient(p, config)
+func CreateSocket(p interfaces.SocketProfile, config models.SocketConfig, socketType string) (interfaces.Socket, error) {
+	st, err := parseSocketType(socketType)
+	if err != nil {
+		return nil, err
 	}
-	return facade.NewSocketServer(p)
+
+	if st == interfaces.SocketTypeClient {
+		return facade.NewSocketClient(p, config), nil
+	}
+	return facade.NewSocketServer(p), nil
+}
+
+func parseSocketType(t string) (interfaces.SocketType, error) {
+	switch t {
+	case "client", "CLIENT":
+		return interfaces.SocketTypeClient, nil
+	case "server", "SERVER":
+		return interfaces.SocketTypeServer, nil
+	default:
+		return 0, fmt.Errorf("invalid socket type: %s (expected 'client' or 'server')", t)
+	}
 }

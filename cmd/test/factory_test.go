@@ -8,7 +8,6 @@ import (
 
 	"github.com/Bastien-Antigravity/safe-socket/src/facade"
 	"github.com/Bastien-Antigravity/safe-socket/src/factory"
-	"github.com/Bastien-Antigravity/safe-socket/src/interfaces"
 	"github.com/Bastien-Antigravity/safe-socket/src/protocols"
 )
 
@@ -21,7 +20,7 @@ func TestTCP_Raw(t *testing.T) {
 	addr := "127.0.0.1:9003" // Port 9003
 
 	// 1. Start Server
-	server, err := factory.Create("tcp", addr, "", interfaces.SocketTypeServer, true)
+	server, err := factory.Create("tcp", addr, "", "server", true)
 	if err != nil {
 		t.Fatalf("Failed to create TCP server: %v", err)
 	}
@@ -61,7 +60,7 @@ func TestTCP_Raw(t *testing.T) {
 
 	// 2. Start Client
 	// Give server a moment to bind? Usually Listen() is synchronous so fine.
-	client, err := factory.Create("tcp", addr, "", interfaces.SocketTypeClient, true)
+	client, err := factory.Create("tcp", addr, "", "client", true)
 	if err != nil {
 		t.Fatalf("Failed to create TCP client: %v", err)
 	}
@@ -98,7 +97,7 @@ func TestTCP_Raw_Write_Method(t *testing.T) {
 	addr := "127.0.0.1:9010" // Distinct port
 
 	// 1. Start Server
-	server, err := factory.Create("tcp", addr, "", interfaces.SocketTypeServer, true)
+	server, err := factory.Create("tcp", addr, "", "server", true)
 	if err != nil {
 		t.Fatalf("Failed to create TCP server: %v", err)
 	}
@@ -130,7 +129,7 @@ func TestTCP_Raw_Write_Method(t *testing.T) {
 	}()
 
 	// 2. Start Client
-	client, err := factory.Create("tcp", addr, "", interfaces.SocketTypeClient, true)
+	client, err := factory.Create("tcp", addr, "", "client", true)
 	if err != nil {
 		t.Fatalf("Failed to create TCP client: %v", err)
 	}
@@ -157,7 +156,7 @@ func TestTCP_Hello(t *testing.T) {
 	addr := "127.0.0.1:9004" // Port 9004
 
 	// 1. Start Server
-	server, err := factory.Create("tcp-hello", addr, "127.0.0.1", interfaces.SocketTypeServer, true)
+	server, err := factory.Create("tcp-hello", addr, "127.0.0.1", "server", true)
 	if err != nil {
 		t.Fatalf("Failed to create TCP Hello server: %v", err)
 	}
@@ -182,7 +181,7 @@ func TestTCP_Hello(t *testing.T) {
 	}()
 
 	// 2. Start Client
-	client, err := factory.Create("tcp-hello", addr, "127.0.0.1", interfaces.SocketTypeClient, false)
+	client, err := factory.Create("tcp-hello", addr, "127.0.0.1", "client", false)
 	if err != nil {
 		t.Fatalf("Failed to create TCP Hello client: %v", err)
 	}
@@ -217,7 +216,7 @@ func TestUDP_Raw(t *testing.T) {
 	addr := "127.0.0.1:9001"
 
 	// 1. Start Server
-	server, err := factory.Create("udp", addr, "", interfaces.SocketTypeServer, true)
+	server, err := factory.Create("udp", addr, "", "server", true)
 	if err != nil {
 		t.Fatalf("Failed to create UDP server: %v", err)
 	}
@@ -254,7 +253,7 @@ func TestUDP_Raw(t *testing.T) {
 	}()
 
 	// 2. Start Client
-	client, err := factory.Create("udp", addr, "", interfaces.SocketTypeClient, true)
+	client, err := factory.Create("udp", addr, "", "client", true)
 	if err != nil {
 		t.Fatalf("Failed to create UDP client: %v", err)
 	}
@@ -280,7 +279,7 @@ func TestUDP_Hello(t *testing.T) {
 	addr := "127.0.0.1:9002"
 
 	// 1. Start Server
-	server, err := factory.Create("udp-hello", addr, "", interfaces.SocketTypeServer, true)
+	server, err := factory.Create("udp-hello", addr, "", "server", true)
 	if err != nil {
 		t.Fatalf("Failed to create UDP Hello server: %v", err)
 	}
@@ -318,7 +317,7 @@ func TestUDP_Hello(t *testing.T) {
 	}()
 
 	// 2. Start Client
-	client, err := factory.Create("udp-hello", addr, "127.0.0.1", interfaces.SocketTypeClient, false)
+	client, err := factory.Create("udp-hello", addr, "127.0.0.1", "client", false)
 	if err != nil {
 		t.Fatalf("Failed to create UDP Hello client: %v", err)
 	}
@@ -355,7 +354,7 @@ func TestSHM_Creation(t *testing.T) {
 	defer os.Remove(path)
 
 	// Only testing Client creation as Server side isn't implemented effectively for SHM yet
-	client, err := factory.Create("shm", path, "", interfaces.SocketTypeClient, false)
+	client, err := factory.Create("shm", path, "", "client", false)
 	if err != nil {
 		t.Fatalf("Failed to create SHM client: %v", err)
 	}

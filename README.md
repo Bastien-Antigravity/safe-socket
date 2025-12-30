@@ -3,7 +3,7 @@
 **Safe Socket** is a high-performance, robust socket library for Go. It provides a reliable abstraction over **TCP**, **UDP**, and **Shared Memory (SHM)** transports with a flexible, profile-based configuration system.
 
 ## Version
-Current Version: `v1.1.2`
+Current Version: `v1.2.0`
 
 ## Installation
 
@@ -39,7 +39,8 @@ import (
 func main() {
     // Example: Connect to a server using TCP with Hello Handshake
     // publicIP is required for the handshake identity.
-    socket, err := safesocket.Create("tcp-hello", "127.0.0.1:9000", "192.168.1.50", safesocket.SocketTypeClient, true)
+    // socketType: "client" or "server"
+    socket, err := safesocket.Create("tcp-hello", "127.0.0.1:9000", "192.168.1.50", "client", true)
     if err != nil {
         log.Fatal(err)
     }
@@ -78,7 +79,7 @@ func main() {
 ```go
 func runServer() {
     // Create a UDP Server handling enveloped packets
-    server, _ := safesocket.Create("udp-hello", "0.0.0.0:9000", "", safesocket.SocketTypeServer, true)
+    server, _ := safesocket.Create("udp-hello", "0.0.0.0:9000", "", "server", true)
     defer server.Close()
 
     for {
