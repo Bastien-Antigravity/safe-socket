@@ -3,7 +3,7 @@
 **Safe Socket** is a high-performance, robust socket library for Go. It provides a reliable abstraction over **TCP**, **UDP**, and **Shared Memory (SHM)** transports with a flexible, profile-based configuration system.
 
 ## Version
-Current Version: `v1.1.1`
+Current Version: `v1.1.2`
 
 ## Installation
 

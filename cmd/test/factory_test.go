@@ -136,8 +136,8 @@ func TestTCP_Raw_Write_Method(t *testing.T) {
 	}
 	defer client.Close()
 
-	// 3. Use the new Write method (which returns error only)
-	if err := client.Write([]byte("WRITE_TEST")); err != nil {
+	// 3. Use the new Write method (which returns count and error)
+	if _, err := client.Write([]byte("WRITE_TEST")); err != nil {
 		t.Fatalf("Client Write failed: %v", err)
 	}
 

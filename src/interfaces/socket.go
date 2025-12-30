@@ -22,7 +22,8 @@ type Socket interface {
 	// Client Methods
 	Open() error
 	Send(data []byte) error
-	Write(data []byte) error
+	// used to complies with io.Writer interface, in logger
+	Write(data []byte) (int, error)
 	Receive(buf []byte) (int, error)
 
 	// Server Methods

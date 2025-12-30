@@ -101,12 +101,12 @@ func (c *SocketClient) Send(data []byte) error {
 }
 
 // Write implements the io.Writer interface in logger.
-func (c *SocketClient) Write(data []byte) error {
+func (c *SocketClient) Write(data []byte) (int, error) {
 	if c.transport == nil {
-		return errors.New("socket not open")
+		return 0, errors.New("socket not open")
 	}
-	_, err := c.transport.Write(data)
-	return err
+	n, err := c.transport.Write(data)
+	return n, err
 }
 
 // -----------------------------------------------------------------------------
