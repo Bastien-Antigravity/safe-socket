@@ -21,7 +21,6 @@ go get github.com/Bastien-Antigravity/safe-socket
     -   **Hello Protocol**: Identity exchange handshake.
     -   **Stateless Envelope (UDP)**: Zero-handshake authentication where every packet carries the sender's identity and payload.
 -   **Unified Facade**: Interact with any transport using `Open()`, `Close()`, `Send()`, `Receive()`, and `Accept()`.
--   **Public Schemas**: Cap'n Proto definitions are exposed in `./schemas/messages.capnp` for cross-language integration.
 
 ## Usage
 
