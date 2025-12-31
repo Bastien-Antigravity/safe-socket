@@ -18,6 +18,7 @@ const (
 type Socket interface {
 	// Common
 	Close() error
+	SetLogger(logger *Logger)
 
 	// Client Methods
 	Open() error

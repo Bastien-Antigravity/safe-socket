@@ -18,7 +18,10 @@ import (
 type SocketServer struct {
 	Profile  interfaces.SocketProfile
 	listener interfaces.TransportListener
+	logger   *interfaces.Logger
 }
+
+// -----------------------------------------------------------------------------
 
 // NewSocketServer creates a new instance of SocketServer.
 func NewSocketServer(p interfaces.SocketProfile) *SocketServer {
@@ -26,6 +29,8 @@ func NewSocketServer(p interfaces.SocketProfile) *SocketServer {
 		Profile: p,
 	}
 }
+
+// -----------------------------------------------------------------------------
 
 // Listen starts listening on the address specified by the profile.
 func (s *SocketServer) Listen() error {
@@ -56,6 +61,8 @@ func (s *SocketServer) Listen() error {
 	s.listener = ln
 	return nil
 }
+
+// -----------------------------------------------------------------------------
 
 // Accept accepts a new connection and performs the handshake if defined.
 func (s *SocketServer) Accept() (interfaces.TransportConnection, error) {
@@ -97,6 +104,8 @@ func (s *SocketServer) Accept() (interfaces.TransportConnection, error) {
 	return conn, nil
 }
 
+// -----------------------------------------------------------------------------
+
 // Close stops the server.
 func (s *SocketServer) Close() error {
 	if s.listener != nil {
@@ -105,6 +114,13 @@ func (s *SocketServer) Close() error {
 		return err
 	}
 	return nil
+}
+
+// -----------------------------------------------------------------------------
+
+// Bind logger to safe-socket
+func (s *SocketServer) SetLogger(logger *interfaces.Logger) {
+	s.logger = logger
 }
 
 // -----------------------------------------------------------------------------

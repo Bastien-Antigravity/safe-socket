@@ -30,3 +30,6 @@ Enable a "Provider" process (e.g., Server) to write data to Shared Memory and **
 1.  **Safety vs Speed**: True "Direct Execution" (Process A running code in Process B) is functionally malware behavior and blocked by the OS kernel.
 2.  **Runtime incompatibility**: A Go function expects the Go Runtime (Garbage Collector, Stack check). Calling it from a raw C pointer without setting up the Go environment will crash the process.
 3.  **Synchronization**: Without OS primitives (Mutex/Semaphores), managing race conditions requires precise Atomic CPU instructions.
+
+
+Add a ping - pong mechanism : server problem, close parent connection handler...
