@@ -7,6 +7,7 @@ import (
 	"github.com/Bastien-Antigravity/safe-socket/src/interfaces"
 	"github.com/Bastien-Antigravity/safe-socket/src/models"
 	"github.com/Bastien-Antigravity/safe-socket/src/protocols"
+	"github.com/Bastien-Antigravity/safe-socket/src/schemas"
 )
 
 // EnvelopedConnection wraps a real TransportConnection.
@@ -18,6 +19,10 @@ type EnvelopedConnection struct {
 	Profile interfaces.SocketProfile
 	Config  models.SocketConfig
 	Proto   *protocols.HelloProtocol // Casted for access to Encapsulate/Decapsulate
+
+	// LastIdentity holds the identity of the sender of the last packet read.
+	// This allows UDP users to inspect who sent the data.
+	LastIdentity *schemas.HelloMsg
 }
 
 // -----------------------------------------------------------------------------
@@ -68,9 +73,8 @@ func (e *EnvelopedConnection) Read(p []byte) (n int, err error) {
 		return 0, err
 	}
 
-	// Note: We could expose 'identity' (Name, IP) here if we had a way.
-	// For now, we just verify it decodes correctly.
-	_ = identity
+	// Store the identity for inspection
+	e.LastIdentity = identity
 
 	// 3. Copy Payload to user buffer
 	if len(payload) > len(p) {

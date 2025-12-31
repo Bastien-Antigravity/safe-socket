@@ -172,6 +172,15 @@ func TestTCP_Hello(t *testing.T) {
 		}
 		defer conn.Close()
 
+		// Verify Identity Access
+		if hc, ok := conn.(*facade.HandshakeConnection); ok {
+			name, _ := hc.Identity.FromName()
+			fmt.Printf("Handshake Identity Name: %s\n", name)
+		} else {
+			errChan <- fmt.Errorf("Connection is not a HandshakeConnection")
+			return
+		}
+
 		// If accepted, handshake succeeded. Just echo.
 		buf := make([]byte, 1024)
 		n, _ := conn.Read(buf)

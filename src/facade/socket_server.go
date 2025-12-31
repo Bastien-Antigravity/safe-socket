@@ -95,10 +95,14 @@ func (s *SocketServer) Accept() (interfaces.TransportConnection, error) {
 		// Currently only one protocol supported
 		proto = protocols.NewHelloProtocol()
 
-		if _, err := proto.WaitInitiation(conn); err != nil {
+		helloMsg, err := proto.WaitInitiation(conn)
+		if err != nil {
 			conn.Close()
 			return nil, err
 		}
+
+		// Wrap with identity
+		conn = NewHandshakeConnection(conn, helloMsg)
 	}
 
 	return conn, nil
