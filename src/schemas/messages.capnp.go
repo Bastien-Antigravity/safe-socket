@@ -14,12 +14,12 @@ type HelloMsg capnp.Struct
 const HelloMsg_TypeID = 0xda3c8f277bce810b
 
 func NewHelloMsg(s *capnp.Segment) (HelloMsg, error) {
-	st, err := capnp.NewStruct(s, capnp.ObjectSize{DataSize: 0, PointerCount: 4})
+	st, err := capnp.NewStruct(s, capnp.ObjectSize{DataSize: 0, PointerCount: 5})
 	return HelloMsg(st), err
 }
 
 func NewRootHelloMsg(s *capnp.Segment) (HelloMsg, error) {
-	st, err := capnp.NewRootStruct(s, capnp.ObjectSize{DataSize: 0, PointerCount: 4})
+	st, err := capnp.NewRootStruct(s, capnp.ObjectSize{DataSize: 0, PointerCount: 5})
 	return HelloMsg(st), err
 }
 
@@ -55,76 +55,115 @@ func (s HelloMsg) Message() *capnp.Message {
 func (s HelloMsg) Segment() *capnp.Segment {
 	return capnp.Struct(s).Segment()
 }
-func (s HelloMsg) Name() (string, error) {
+
+// -----------------------------------------------------
+// Field @0: fromName
+// -----------------------------------------------------
+
+func (s HelloMsg) FromName() (string, error) {
 	p, err := capnp.Struct(s).Ptr(0)
 	return p.Text(), err
 }
 
-func (s HelloMsg) HasName() bool {
+func (s HelloMsg) HasFromName() bool {
 	return capnp.Struct(s).HasPtr(0)
 }
 
-func (s HelloMsg) NameBytes() ([]byte, error) {
+func (s HelloMsg) FromNameBytes() ([]byte, error) {
 	p, err := capnp.Struct(s).Ptr(0)
 	return p.TextBytes(), err
 }
 
-func (s HelloMsg) SetName(v string) error {
+func (s HelloMsg) SetFromName(v string) error {
 	return capnp.Struct(s).SetText(0, v)
 }
 
-func (s HelloMsg) Host() (string, error) {
+// -----------------------------------------------------
+// Field @1: fromHost
+// -----------------------------------------------------
+
+func (s HelloMsg) FromHost() (string, error) {
 	p, err := capnp.Struct(s).Ptr(1)
 	return p.Text(), err
 }
 
-func (s HelloMsg) HasHost() bool {
+func (s HelloMsg) HasFromHost() bool {
 	return capnp.Struct(s).HasPtr(1)
 }
 
-func (s HelloMsg) HostBytes() ([]byte, error) {
+func (s HelloMsg) FromHostBytes() ([]byte, error) {
 	p, err := capnp.Struct(s).Ptr(1)
 	return p.TextBytes(), err
 }
 
-func (s HelloMsg) SetHost(v string) error {
+func (s HelloMsg) SetFromHost(v string) error {
 	return capnp.Struct(s).SetText(1, v)
 }
 
-func (s HelloMsg) Address() (string, error) {
+// -----------------------------------------------------
+// Field @2: fromAddress
+// -----------------------------------------------------
+
+func (s HelloMsg) FromAddress() (string, error) {
 	p, err := capnp.Struct(s).Ptr(2)
 	return p.Text(), err
 }
 
-func (s HelloMsg) HasAddress() bool {
+func (s HelloMsg) HasFromAddress() bool {
 	return capnp.Struct(s).HasPtr(2)
 }
 
-func (s HelloMsg) AddressBytes() ([]byte, error) {
+func (s HelloMsg) FromAddressBytes() ([]byte, error) {
 	p, err := capnp.Struct(s).Ptr(2)
 	return p.TextBytes(), err
 }
 
-func (s HelloMsg) SetAddress(v string) error {
+func (s HelloMsg) SetFromAddress(v string) error {
 	return capnp.Struct(s).SetText(2, v)
 }
 
-func (s HelloMsg) PublicIP() (string, error) {
+// -----------------------------------------------------
+// Field @3: toAddress
+// -----------------------------------------------------
+
+func (s HelloMsg) ToAddress() (string, error) {
 	p, err := capnp.Struct(s).Ptr(3)
 	return p.Text(), err
 }
 
-func (s HelloMsg) HasPublicIP() bool {
+func (s HelloMsg) HasToAddress() bool {
 	return capnp.Struct(s).HasPtr(3)
 }
 
-func (s HelloMsg) PublicIPBytes() ([]byte, error) {
+func (s HelloMsg) ToAddressBytes() ([]byte, error) {
 	p, err := capnp.Struct(s).Ptr(3)
 	return p.TextBytes(), err
 }
 
-func (s HelloMsg) SetPublicIP(v string) error {
+func (s HelloMsg) SetToAddress(v string) error {
 	return capnp.Struct(s).SetText(3, v)
+}
+
+// -----------------------------------------------------
+// Field @4: fromPublicIP
+// -----------------------------------------------------
+
+func (s HelloMsg) FromPublicIP() (string, error) {
+	p, err := capnp.Struct(s).Ptr(4)
+	return p.Text(), err
+}
+
+func (s HelloMsg) HasFromPublicIP() bool {
+	return capnp.Struct(s).HasPtr(4)
+}
+
+func (s HelloMsg) FromPublicIPBytes() ([]byte, error) {
+	p, err := capnp.Struct(s).Ptr(4)
+	return p.TextBytes(), err
+}
+
+func (s HelloMsg) SetFromPublicIP(v string) error {
+	return capnp.Struct(s).SetText(4, v)
 }
 
 // HelloMsg_List is a list of HelloMsg.

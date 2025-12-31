@@ -14,7 +14,9 @@ import (
 //   - For Servers: This interface is returned by the Listener.Accept() method.
 type TransportConnection interface {
 	io.ReadWriteCloser
-	// We might add more specific transport controls here if needed.
+	// Extended methods for address information
+	LocalAddr() net.Addr
+	RemoteAddr() net.Addr
 }
 
 // TransportListener defines a listener that waits for incoming connections.

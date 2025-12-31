@@ -18,7 +18,7 @@ import (
 type SocketServer struct {
 	Profile  interfaces.SocketProfile
 	listener interfaces.TransportListener
-	logger   *interfaces.Logger
+	Logger   *interfaces.Logger
 }
 
 // -----------------------------------------------------------------------------
@@ -120,7 +120,7 @@ func (s *SocketServer) Close() error {
 
 // Bind logger to safe-socket
 func (s *SocketServer) SetLogger(logger *interfaces.Logger) {
-	s.logger = logger
+	s.Logger = logger
 }
 
 // -----------------------------------------------------------------------------

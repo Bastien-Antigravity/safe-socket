@@ -36,6 +36,8 @@ func (s *FramedTCPSocket) SetKeepAlive(period time.Duration) error {
 	return nil
 }
 
+// -----------------------------------------------------------------------------
+
 // SetNoDelay controls Nagle's algorithm (true = disable Nagle, lower latency).
 func (s *FramedTCPSocket) SetNoDelay(enabled bool) error {
 	if tcpConn, ok := s.Conn.(*net.TCPConn); ok {
@@ -44,6 +46,8 @@ func (s *FramedTCPSocket) SetNoDelay(enabled bool) error {
 	return nil
 }
 
+// -----------------------------------------------------------------------------
+
 // SetReadBuffer sets the size of the operating system's receive buffer.
 func (s *FramedTCPSocket) SetReadBuffer(bytes int) error {
 	if tcpConn, ok := s.Conn.(*net.TCPConn); ok {
@@ -51,6 +55,8 @@ func (s *FramedTCPSocket) SetReadBuffer(bytes int) error {
 	}
 	return nil
 }
+
+// -----------------------------------------------------------------------------
 
 // SetWriteBuffer sets the size of the operating system's transmit buffer.
 func (s *FramedTCPSocket) SetWriteBuffer(bytes int) error {
@@ -111,4 +117,18 @@ func (s *FramedTCPSocket) Read(p []byte) (n int, err error) {
 
 func (s *FramedTCPSocket) Close() error {
 	return s.Conn.Close()
+}
+
+// -----------------------------------------------------------------------------
+
+// LocalAddr returns the local network address.
+func (s *FramedTCPSocket) LocalAddr() net.Addr {
+	return s.Conn.LocalAddr()
+}
+
+// -----------------------------------------------------------------------------
+
+// RemoteAddr returns the remote network address.
+func (s *FramedTCPSocket) RemoteAddr() net.Addr {
+	return s.Conn.RemoteAddr()
 }

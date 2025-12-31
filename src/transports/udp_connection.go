@@ -12,8 +12,8 @@ type UdpSocket struct {
 	Timeout time.Duration
 
 	// Server-Side: "Transient" socket fields
-	RemoteAddr *net.UDPAddr // If set, Write() uses WriteToUDP
-	RecvBuf    []byte       // If set, Read() returns this buffer first (one-shot)
+	TransientRemoteAddr *net.UDPAddr // If set, Write() uses WriteToUDP
+	RecvBuf             []byte       // If set, Read() returns this buffer first (one-shot)
 }
 
 // -----------------------------------------------------------------------------
@@ -28,10 +28,10 @@ func NewUdpSocket(conn *net.UDPConn, timeout time.Duration) *UdpSocket {
 // NewTransientUdpSocket creates a socket representing a single packet from a sender.
 func NewTransientUdpSocket(conn *net.UDPConn, addr *net.UDPAddr, data []byte, timeout time.Duration) *UdpSocket {
 	return &UdpSocket{
-		Conn:       conn,
-		Timeout:    timeout,
-		RemoteAddr: addr,
-		RecvBuf:    data,
+		Conn:                conn,
+		Timeout:             timeout,
+		TransientRemoteAddr: addr,
+		RecvBuf:             data,
 	}
 }
 
@@ -46,8 +46,8 @@ func (s *UdpSocket) Write(p []byte) (n int, err error) {
 	}
 
 	// If this is a transient server socket, reply to the specific remote address
-	if s.RemoteAddr != nil {
-		return s.Conn.WriteToUDP(p, s.RemoteAddr)
+	if s.TransientRemoteAddr != nil {
+		return s.Conn.WriteToUDP(p, s.TransientRemoteAddr)
 	}
 
 	// Otherwise, use standard Write (client-side connected socket)
@@ -76,4 +76,17 @@ func (s *UdpSocket) Read(p []byte) (n int, err error) {
 
 func (s *UdpSocket) Close() error {
 	return s.Conn.Close()
+}
+
+// LocalAddr returns the local network address.
+func (s *UdpSocket) LocalAddr() net.Addr {
+	return s.Conn.LocalAddr()
+}
+
+// RemoteAddr returns the remote network address.
+func (s *UdpSocket) RemoteAddr() net.Addr {
+	if s.TransientRemoteAddr != nil {
+		return s.TransientRemoteAddr
+	}
+	return s.Conn.RemoteAddr()
 }

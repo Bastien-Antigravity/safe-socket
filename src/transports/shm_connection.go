@@ -2,6 +2,7 @@ package transports
 
 import (
 	"io"
+	"net"
 	"os"
 	"sync/atomic"
 	"time"
@@ -167,3 +168,23 @@ func (t *ShmTransport) Close() error {
 	t.MMap.Unmap()
 	return t.File.Close()
 }
+
+// -----------------------------------------------------------------------------
+
+// LocalAddr returns the local network address (SHM pseudo-address).
+func (t *ShmTransport) LocalAddr() net.Addr {
+	return ShmAddr{}
+}
+
+// -----------------------------------------------------------------------------
+
+// RemoteAddr returns the remote network address (SHM pseudo-address).
+func (t *ShmTransport) RemoteAddr() net.Addr {
+	return ShmAddr{}
+}
+
+// ShmAddr implements net.Addr for Shared Memory.
+type ShmAddr struct{}
+
+func (a ShmAddr) Network() string { return "shm" }
+func (a ShmAddr) String() string  { return "memory" }

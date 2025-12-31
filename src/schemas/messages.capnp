@@ -5,11 +5,13 @@ $Go.package("schemas");
 $Go.import("github.com/Bastien-Antigravity/safe-socket/src/schemas");
 
 # Standard Handshake Message (TCP / Connection Establishment)
+# Connection works also through proxies, thanks to HelloMsg
 struct HelloMsg {
-  name     @0 :Text;
-  host     @1 :Text;
-  address  @2 :Text;
-  publicIP @3 :Text;
+  fromName     @0 :Text;
+  fromHost     @1 :Text;
+  fromAddress  @2 :Text;
+  toAddress    @3 :Text;
+  fromPublicIP @4 :Text;
 }
 
 # Optimized Stateless Envelope (UDP Per-Packet)

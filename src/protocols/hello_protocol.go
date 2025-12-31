@@ -42,10 +42,15 @@ func (p *HelloProtocol) Initiate(conn interfaces.TransportConnection, profile in
 		return err
 	}
 
-	_ = helloMsg.SetName(profile.GetName())
-	_ = helloMsg.SetHost(hostname)
-	_ = helloMsg.SetAddress(profile.GetAddress())
-	_ = helloMsg.SetPublicIP(publicIP)
+	// Dynamic Address Resolution from Transport
+	localAddr := conn.LocalAddr().String()
+	remoteAddr := conn.RemoteAddr().String()
+
+	_ = helloMsg.SetFromName(profile.GetName())
+	_ = helloMsg.SetFromHost(hostname)
+	_ = helloMsg.SetFromAddress(localAddr) // Actual bound address
+	_ = helloMsg.SetToAddress(remoteAddr)  // Target address
+	_ = helloMsg.SetFromPublicIP(publicIP)
 
 	// Marshal to bytes
 	data, err := msg.Marshal()
@@ -114,6 +119,8 @@ func (p *HelloProtocol) Encapsulate(data []byte, profile interfaces.SocketProfil
 	return msg.Marshal()
 }
 
+// -----------------------------------------------------------------------------
+
 // Decapsulate unwraps a PacketEnvelope and returns the payload.
 // It also reconstructs a partial HelloMsg for identity verification.
 func (p *HelloProtocol) Decapsulate(packet []byte) ([]byte, *schemas.HelloMsg, error) {
@@ -146,7 +153,7 @@ func (p *HelloProtocol) Decapsulate(packet []byte) ([]byte, *schemas.HelloMsg, e
 	// Let's create a minimal HelloMsg to satisfy the return type
 	_, metaSeg, _ := capnp.NewMessage(capnp.SingleSegment(nil))
 	helloMsg, _ := schemas.NewRootHelloMsg(metaSeg)
-	_ = helloMsg.SetName(senderID)
+	_ = helloMsg.SetFromName(senderID)
 	// Other fields are empty/default
 
 	// Ensure the underlying message stays alive if needed, but here we return the struct.

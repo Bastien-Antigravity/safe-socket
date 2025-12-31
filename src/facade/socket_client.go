@@ -17,7 +17,7 @@ type SocketClient struct {
 	Profile   interfaces.SocketProfile
 	Config    models.SocketConfig
 	transport interfaces.TransportConnection
-	logger    *interfaces.Logger
+	Logger    *interfaces.Logger
 }
 
 // -----------------------------------------------------------------------------
@@ -136,7 +136,7 @@ func (c *SocketClient) Close() error {
 
 // Bind logger to safe-socket
 func (c *SocketClient) SetLogger(logger *interfaces.Logger) {
-	c.logger = logger
+	c.Logger = logger
 }
 
 // -----------------------------------------------------------------------------

@@ -2,6 +2,7 @@ package facade
 
 import (
 	"errors"
+	"net"
 
 	"github.com/Bastien-Antigravity/safe-socket/src/interfaces"
 	"github.com/Bastien-Antigravity/safe-socket/src/models"
@@ -84,4 +85,18 @@ func (e *EnvelopedConnection) Read(p []byte) (n int, err error) {
 
 func (e *EnvelopedConnection) Close() error {
 	return e.Conn.Close()
+}
+
+// -----------------------------------------------------------------------------
+
+// LocalAddr returns the local network address.
+func (e *EnvelopedConnection) LocalAddr() net.Addr {
+	return e.Conn.LocalAddr()
+}
+
+// -----------------------------------------------------------------------------
+
+// RemoteAddr returns the remote network address.
+func (e *EnvelopedConnection) RemoteAddr() net.Addr {
+	return e.Conn.RemoteAddr()
 }
