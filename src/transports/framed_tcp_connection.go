@@ -115,6 +115,32 @@ func (s *FramedTCPSocket) Read(p []byte) (n int, err error) {
 
 // -----------------------------------------------------------------------------
 
+// ReadMessage implements the dynamic read.
+func (s *FramedTCPSocket) ReadMessage() ([]byte, error) {
+	if s.Timeout > 0 {
+		_ = s.Conn.SetReadDeadline(time.Now().Add(s.Timeout))
+	}
+
+	// 1. Read Length
+	header := make([]byte, 4)
+	if _, err := io.ReadFull(s.Conn, header); err != nil {
+		return nil, err
+	}
+	length := binary.BigEndian.Uint32(header)
+
+	// 2. Allocate exact size
+	buf := make([]byte, length)
+
+	// 3. Read Body
+	if _, err := io.ReadFull(s.Conn, buf); err != nil {
+		return nil, err
+	}
+
+	return buf, nil
+}
+
+// -----------------------------------------------------------------------------
+
 func (s *FramedTCPSocket) Close() error {
 	return s.Conn.Close()
 }

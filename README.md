@@ -46,13 +46,17 @@ func main() {
     }
     defer socket.Close()
 
-    // Send Data
+	// Send Data
     socket.Send([]byte("Hello Server!"))
 
-    // Receive Data
-    buf := make([]byte, 1024)
-    n, _ := socket.Read(buf)
-    log.Printf("Received: %s", string(buf[:n]))
+    // Receive Data (Dynamic Buffer)
+    // Receive() automatically allocates the correct size.
+    msg, _ := socket.Receive()
+    log.Printf("Received: %s", string(msg))
+
+    // Alternative: Use Read() for fixed buffers (io.Reader compliant)
+    // buf := make([]byte, 1024)
+    // n, _ := socket.Read(buf)
 }
 ```
 
@@ -85,18 +89,19 @@ func runServer() {
     for {
         // Accept blocks until a packet arrives.
         // For UDP, this returns a "Transient Socket" representing that specific packet/sender.
+        // Returns interfaces.TransportConnection
         conn, err := server.Accept()
         if err != nil { continue }
 
-        go func(c safesocket.Socket) {
+        go func(c interfaces.TransportConnection) {
             defer c.Close()
             
             // Read the payload (Decapsulation happens automatically)
-            buf := make([]byte, 1024)
-            n, _ := c.Read(buf)
+            // Use ReadMessage() for dynamic allocation
+            msg, _ := c.ReadMessage()
             
-            // Reply (Encapsulation happens automatically)
-            c.Write([]byte("Message Received: " + string(buf[:n])))
+            // Reply (Encapsulation happens automatically via Write)
+            c.Write([]byte("Message Received: " + string(msg)))
         }(conn)
     }
 }

@@ -163,6 +163,51 @@ func (t *ShmTransport) Read(p []byte) (n int, err error) {
 
 // -----------------------------------------------------------------------------
 
+// ReadMessage for SHM reads all available data or blocks until data arrives.
+// It acts as a "Frame Read" if the producer writes in frames, but technically it reads "everything available".
+func (t *ShmTransport) ReadMessage() ([]byte, error) {
+	// Blocking Read logic duplicated from Read() but with allocation
+	deadline := time.Now().Add(t.Timeout)
+	for {
+		tail := atomic.LoadUint64(t.Tail)
+		head := atomic.LoadUint64(t.Head)
+
+		if head == tail {
+			// Empty. Spin-wait.
+			if t.Timeout > 0 && time.Now().After(deadline) {
+				return nil, os.ErrDeadlineExceeded
+			}
+			time.Sleep(1 * time.Microsecond)
+			continue
+		}
+
+		// Calculate how much we can read
+		available := tail - head
+		// We limit to a reasonable max if needed, but here we read all available
+		if available > BufferDataSize {
+			// Should strictly not happen unless overrun, but handle
+			available = BufferDataSize
+		}
+
+		toRead := available
+		buf := make([]byte, toRead)
+
+		readIdx := head % BufferDataSize
+		if readIdx+toRead <= BufferDataSize {
+			copy(buf, t.Data[readIdx:readIdx+toRead])
+		} else {
+			firstPart := BufferDataSize - readIdx
+			copy(buf[:firstPart], t.Data[readIdx:])
+			copy(buf[firstPart:], t.Data[:toRead-firstPart])
+		}
+
+		atomic.AddUint64(t.Head, toRead)
+		return buf, nil
+	}
+}
+
+// -----------------------------------------------------------------------------
+
 func (t *ShmTransport) Close() error {
 	// Flush? MMap usually syncs periodically.
 	t.MMap.Unmap()

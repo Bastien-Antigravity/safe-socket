@@ -17,6 +17,10 @@ type TransportConnection interface {
 	// Extended methods for address information
 	LocalAddr() net.Addr
 	RemoteAddr() net.Addr
+
+	// Read implemented in io.ReadWriteCloser
+	// ReadMessage reads a complete frame/packet and returns it in a newly allocated buffer.
+	ReadMessage() ([]byte, error)
 }
 
 // TransportListener defines a listener that waits for incoming connections.

@@ -87,6 +87,33 @@ func (e *EnvelopedConnection) Read(p []byte) (n int, err error) {
 
 // -----------------------------------------------------------------------------
 
+// ReadMessage implementation for Enveloped Connection
+func (e *EnvelopedConnection) ReadMessage() ([]byte, error) {
+	// 1. Read Raw Packet (Envelope)
+	rawBuf, err := e.Conn.ReadMessage()
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. Decapsulate
+	payload, identity, err := e.Proto.Decapsulate(rawBuf)
+	if err != nil {
+		return nil, err
+	}
+
+	// Store the identity for inspection
+	e.LastIdentity = identity
+
+	// 3. Return Payload (copy? raw payload is slice of rawBuf usually, but Decapsulate returns slice)
+	// New buffer needed? Decapsulate returns new slice.
+	// We should probably return a copy to be safe if Decapsulate returns slice of rawBuf,
+	// because rawBuf might be reused if optimization happens, but ReadMessage allocates.
+	// So returning slice is fine.
+	return payload, nil
+}
+
+// -----------------------------------------------------------------------------
+
 func (e *EnvelopedConnection) Close() error {
 	return e.Conn.Close()
 }
@@ -104,3 +131,5 @@ func (e *EnvelopedConnection) LocalAddr() net.Addr {
 func (e *EnvelopedConnection) RemoteAddr() net.Addr {
 	return e.Conn.RemoteAddr()
 }
+
+// -----------------------------------------------------------------------------

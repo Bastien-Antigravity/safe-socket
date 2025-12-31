@@ -74,14 +74,57 @@ func (s *UdpSocket) Read(p []byte) (n int, err error) {
 
 // -----------------------------------------------------------------------------
 
+// ReadMessage for UDP allocates a buffer large enough for a standard UDP packet (64KB max),
+// reads, and returns the sliced data.
+func (s *UdpSocket) ReadMessage() ([]byte, error) {
+	// If we have a pre-read buffer (Transient Server Socket), return it immediately
+	if s.RecvBuf != nil {
+		result := make([]byte, len(s.RecvBuf))
+		copy(result, s.RecvBuf)
+		s.RecvBuf = nil // consumed
+		return result, nil
+	}
+
+	if s.Timeout > 0 {
+		_ = s.Conn.SetReadDeadline(time.Now().Add(s.Timeout))
+	}
+
+	// Max UDP packet size is technically ~65535.
+	// We allocate a temp buffer.
+	tmp := make([]byte, 65535)
+
+	n, remoteAddr, err := s.Conn.ReadFromUDP(tmp)
+	if err != nil {
+		return nil, err
+	}
+
+	// For Transient logic (server side reply), we store the remote addr
+	// Note: Thread safety issue here if sharing socket, but UDP socket per-packet model usually implies single thread or copy.
+	// But actually, UdpSocket struct is updated with TransientRemoteAddr.
+	s.TransientRemoteAddr = remoteAddr
+
+	// Return a copy of exactly n bytes
+	// Or return slice? Slice keeps underlying array alive. Copy is safer for memory if array is huge.
+	// Given 64KB is small, we can copy to fit.
+	result := make([]byte, n)
+	copy(result, tmp[:n])
+	return result, nil
+}
+
+// -----------------------------------------------------------------------------
+
 func (s *UdpSocket) Close() error {
 	return s.Conn.Close()
 }
+
+// -----------------------------------------------------------------------------
 
 // LocalAddr returns the local network address.
 func (s *UdpSocket) LocalAddr() net.Addr {
 	return s.Conn.LocalAddr()
 }
+
+// -----------------------------------------------------------------------------
 
 // RemoteAddr returns the remote network address.
 func (s *UdpSocket) RemoteAddr() net.Addr {

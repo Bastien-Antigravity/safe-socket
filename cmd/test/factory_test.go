@@ -82,13 +82,12 @@ func TestTCP_Raw(t *testing.T) {
 	}
 
 	// 5. Client Read verification
-	buf := make([]byte, 1024)
-	n, err := client.Receive(buf)
+	buf, err := client.Receive()
 	if err != nil {
 		t.Fatalf("Client receive failed: %v", err)
 	}
-	if string(buf[:n]) != "TCP_PONG" {
-		t.Fatalf("Client received unexpected: %s", string(buf[:n]))
+	if string(buf) != "TCP_PONG" {
+		t.Fatalf("Client received unexpected: %s", string(buf))
 	}
 }
 

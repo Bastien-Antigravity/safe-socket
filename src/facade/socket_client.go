@@ -112,13 +112,21 @@ func (c *SocketClient) Write(data []byte) (int, error) {
 
 // -----------------------------------------------------------------------------
 
-// Receive reads from the transport into the provided buffer.
-// It returns the number of bytes read and any error encountered.
-func (c *SocketClient) Receive(buf []byte) (int, error) {
+// Receive reads from the transport into a newly allocated buffer.
+// It returns the data read and any error encountered.
+func (c *SocketClient) Receive() ([]byte, error) {
+	if c.transport == nil {
+		return nil, errors.New("socket not open")
+	}
+	return c.transport.ReadMessage()
+}
+
+// Read reads from the transport into the provided buffer (io.Reader compliance).
+func (c *SocketClient) Read(p []byte) (int, error) {
 	if c.transport == nil {
 		return 0, errors.New("socket not open")
 	}
-	return c.transport.Read(buf)
+	return c.transport.Read(p)
 }
 
 // -----------------------------------------------------------------------------

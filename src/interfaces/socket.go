@@ -25,7 +25,10 @@ type Socket interface {
 	Send(data []byte) error
 	// used to complies with io.Writer interface, in logger
 	Write(data []byte) (int, error)
-	Receive(buf []byte) (int, error)
+	// Read into a fixed buffer (complies with io.Reader)
+	Read(p []byte) (int, error)
+	// custom Read method, simpler to use than Read(p []byte)
+	Receive() ([]byte, error)
 
 	// Server Methods
 	Listen() error

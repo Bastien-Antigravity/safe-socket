@@ -143,6 +143,10 @@ func (s *SocketServer) Write(data []byte) (int, error) {
 	return 0, errors.New("method Write not supported for Server socket")
 }
 
-func (s *SocketServer) Receive(buf []byte) (int, error) {
-	return 0, errors.New("method Receive not supported for Server socket")
+func (s *SocketServer) Receive() ([]byte, error) {
+	return nil, errors.New("method Receive not supported for Server socket")
+}
+
+func (s *SocketServer) Read(p []byte) (int, error) {
+	return 0, errors.New("method Read not supported for Server socket")
 }
