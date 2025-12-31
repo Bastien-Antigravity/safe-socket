@@ -14,7 +14,8 @@ go get github.com/Bastien-Antigravity/safe-socket
 ## Features
 
 -   **Modular Transports**:
-    -   **Framed TCP**: Reliable, persistent connections with message framing.
+-   **Modular Transports**:
+    -   **Framed TCP**: Reliable, persistent connections with message framing. Optimizes `Read()` via buffering to support safe buffer pooling (prevents header loss on short reads).
     -   **UDP**: High-speed, connectionless communication with optional reliability layers.
     -   **Shared Memory (SHM)**: Ultra-low latency IPC for local processes using memory-mapped files (Ring Buffer).
 -   **Intelligent Protocols**:

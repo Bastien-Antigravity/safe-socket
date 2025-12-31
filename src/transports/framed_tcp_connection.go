@@ -1,6 +1,7 @@
 package transports
 
 import (
+	"bufio"
 	"encoding/binary"
 	"io"
 	"net"
@@ -11,6 +12,7 @@ import (
 // It uses a 4-byte BigEndian length header for every write.
 type FramedTCPSocket struct {
 	Conn    net.Conn
+	reader  *bufio.Reader
 	Timeout time.Duration
 }
 
@@ -19,6 +21,7 @@ type FramedTCPSocket struct {
 func NewFramedTCPSocket(conn net.Conn, timeout time.Duration) *FramedTCPSocket {
 	return &FramedTCPSocket{
 		Conn:    conn,
+		reader:  bufio.NewReader(conn),
 		Timeout: timeout,
 	}
 }
@@ -91,26 +94,36 @@ func (s *FramedTCPSocket) Write(p []byte) (n int, err error) {
 // -----------------------------------------------------------------------------
 
 // Read expects a 4-byte BigEndian length header, then reads that many bytes.
+// SAFE UPDATE: Uses Peek/Discard to ensure header is not lost if buffer is too short.
 func (s *FramedTCPSocket) Read(p []byte) (n int, err error) {
 	if s.Timeout > 0 {
 		_ = s.Conn.SetReadDeadline(time.Now().Add(s.Timeout))
 	}
 
-	// 1. Read Length (4 bytes)
-	header := make([]byte, 4)
-	if _, err := io.ReadFull(s.Conn, header); err != nil {
+	// 1. Peek content check
+	// We need 4 bytes for header.
+	header, err := s.reader.Peek(4)
+	if err != nil {
 		return 0, err
 	}
 
+	// 2. Decode Length
 	length := binary.BigEndian.Uint32(header)
 
-	// 2. Check provided buffer size
+	// 3. Check Buffer Size BEFORE consuming header
 	if uint32(len(p)) < length {
 		return 0, io.ErrShortBuffer
 	}
 
-	// 3. Read Body
-	return io.ReadFull(s.Conn, p[:length])
+	// 4. Safe to proceed: Consume Header
+	if _, err := s.reader.Discard(4); err != nil {
+		// Should not happen if Peek succeeded, unless connection closed in between micro-ops
+		return 0, err
+	}
+
+	// 5. Read Body
+	// We use ReadFull directly on the bufio reader.
+	return io.ReadFull(s.reader, p[:length])
 }
 
 // -----------------------------------------------------------------------------
@@ -121,9 +134,9 @@ func (s *FramedTCPSocket) ReadMessage() ([]byte, error) {
 		_ = s.Conn.SetReadDeadline(time.Now().Add(s.Timeout))
 	}
 
-	// 1. Read Length
+	// 1. Read Length (Must use reader to avoid skipping buffered data)
 	header := make([]byte, 4)
-	if _, err := io.ReadFull(s.Conn, header); err != nil {
+	if _, err := io.ReadFull(s.reader, header); err != nil {
 		return nil, err
 	}
 	length := binary.BigEndian.Uint32(header)
@@ -132,7 +145,7 @@ func (s *FramedTCPSocket) ReadMessage() ([]byte, error) {
 	buf := make([]byte, length)
 
 	// 3. Read Body
-	if _, err := io.ReadFull(s.Conn, buf); err != nil {
+	if _, err := io.ReadFull(s.reader, buf); err != nil {
 		return nil, err
 	}
 
