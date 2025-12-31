@@ -6,9 +6,6 @@ import (
 	"github.com/Bastien-Antigravity/safe-socket/src/models"
 )
 
-// Version defines the current library version.
-const Version = "1.2.2"
-
 // Socket is an alias for the Facade to simplify usage.
 type Socket = interfaces.Socket
 
