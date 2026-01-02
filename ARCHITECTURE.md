@@ -6,7 +6,7 @@
 
 ```mermaid
 graph TD
-    User[User Application] --> Factory[Factory (Create/CreateSocket)]
+    User[User Application] --> Factory["Factory (Create/CreateSocket)"]
     Factory --> Facade[Facade Layer]
     
     subgraph Facade Layer
@@ -14,7 +14,7 @@ graph TD
         Server[SocketServer]
     end
     
-    Facade --> Protocol[Protocol Layer (Optional)]
+    Facade --> Protocol["Protocol Layer (Optional)"]
     Facade --> Transport[Transport Layer]
     Protocol --> Transport
     
