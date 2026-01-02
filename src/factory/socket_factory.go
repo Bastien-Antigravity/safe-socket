@@ -28,46 +28,43 @@ import (
 // Returns:
 //
 //	An interfaces.Socket which can be used to Send/Receive (Client) or Accept (Server).
+//
+// Create is the simplified library entry point for creating any type of Socket.
+//
+// Parameters:
+//   - profileName: e.g. "tcp-hello" (currently supported)
+//   - address: destination address to connect to (Client) or bind to (Server) (e.g. "127.0.0.1:8081")
+//   - publicIP: this node's public IP (used for protocol handshake data)
+//   - socketType: "client" or "server" (case-insensitive)
+//   - autoConnect: if true, automatically calls Open() (Client) or Listen() (Server)
+//
+// Returns:
+//
+//	An interfaces.Socket which can be used to Send/Receive (Client) or Accept (Server).
 func Create(profileName, address, publicIP string, socketType string, autoConnect bool) (interfaces.Socket, error) {
+	config := models.SocketConfig{
+		PublicIP: publicIP,
+	}
+	return CreateWithConfig(profileName, address, config, socketType, autoConnect)
+}
+
+// CreateWithConfig is the extended library entry point allowing full configuration.
+//
+// Parameters:
+//   - profileName: e.g. "tcp-hello"
+//   - address: destination address
+//   - config: models.SocketConfig (allows setting Deadlines, PublicIP, etc.)
+//   - socketType: "client" or "server"
+//   - autoConnect: if true, automatically calls Open() / Listen()
+func CreateWithConfig(profileName, address string, config models.SocketConfig, socketType string, autoConnect bool) (interfaces.Socket, error) {
 	st, err := parseSocketType(socketType)
 	if err != nil {
 		return nil, err
 	}
 
-	var p interfaces.SocketProfile
-
-	switch profileName {
-	case "tcp-hello":
-		// Default timeout 5 seconds for library usage
-		if st == interfaces.SocketTypeClient {
-			p = profiles.NewTcpHelloClientProfile("TcpClient", address, 5000)
-		} else {
-			p = profiles.NewTcpHelloServerProfile("TcpServer", address, 5000)
-		}
-	case "tcp":
-		if st == interfaces.SocketTypeClient {
-			p = profiles.NewTcpClientProfile("TcpRaw", address, 5000)
-		} else {
-			p = profiles.NewTcpServerProfile("TcpRaw", address, 5000)
-		}
-
-	// UDP Support
-	case "udp":
-		p = profiles.NewUdpProfile("UdpRaw", address, 5000)
-	case "udp-hello":
-		p = profiles.NewUdpHelloProfile("UdpHello", address, 5000)
-
-	// SHM Support
-	case "shm":
-		p = profiles.NewShmProfile(address, 5000) // address is path
-	case "shm-hello":
-		p = profiles.NewShmHelloProfile(address, 5000)
-	default:
-		return nil, fmt.Errorf("unknown profile: %s", profileName)
-	}
-
-	config := models.SocketConfig{
-		PublicIP: publicIP,
+	p, err := createProfile(profileName, address, st)
+	if err != nil {
+		return nil, err
 	}
 
 	if autoConnect {
@@ -75,6 +72,36 @@ func Create(profileName, address, publicIP string, socketType string, autoConnec
 	}
 
 	return CreateSocket(p, config, socketType)
+}
+
+func createProfile(profileName, address string, st interfaces.SocketType) (interfaces.SocketProfile, error) {
+	switch profileName {
+	case "tcp-hello":
+		// Default timeout 5 seconds for library usage
+		if st == interfaces.SocketTypeClient {
+			return profiles.NewTcpHelloClientProfile("TcpClient", address, 5000), nil
+		}
+		return profiles.NewTcpHelloServerProfile("TcpServer", address, 5000), nil
+	case "tcp":
+		if st == interfaces.SocketTypeClient {
+			return profiles.NewTcpClientProfile("TcpRaw", address, 5000), nil
+		}
+		return profiles.NewTcpServerProfile("TcpRaw", address, 5000), nil
+
+	// UDP Support
+	case "udp":
+		return profiles.NewUdpProfile("UdpRaw", address, 5000), nil
+	case "udp-hello":
+		return profiles.NewUdpHelloProfile("UdpHello", address, 5000), nil
+
+	// SHM Support
+	case "shm":
+		return profiles.NewShmProfile(address, 5000), nil // address is path
+	case "shm-hello":
+		return profiles.NewShmHelloProfile(address, 5000), nil
+	default:
+		return nil, fmt.Errorf("unknown profile: %s", profileName)
+	}
 }
 
 // -----------------------------------------------------------------------------

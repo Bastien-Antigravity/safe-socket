@@ -3,7 +3,7 @@
 **Safe Socket** is a high-performance, robust socket library for Go. It provides a reliable abstraction over **TCP**, **UDP**, and **Shared Memory (SHM)** transports with a flexible, profile-based configuration system.
 
 ## Version
-Current Version: `v1.4.0`
+Current Version: `v1.4.1`
 
 ## Installation
 
@@ -66,6 +66,23 @@ func main() {
     // Alternative: Use Read() for fixed buffers (io.Reader compliant)
     // buf := make([]byte, 1024)
     // n, _ := socket.Read(buf)
+}
+```
+
+### Advanced Creation
+
+For more control (e.g., setting a default deadline), use `safesocket.CreateWithConfig`:
+
+```go
+config := models.SocketConfig{
+    PublicIP: "1.2.3.4",
+    Deadline: 500 * time.Millisecond, // Enforce 500ms deadline on accepted connections
+}
+
+// CreateWithConfig(profile, address, config, type, autoConnect)
+socket, err := safesocket.CreateWithConfig("tcp-hello", "127.0.0.1:9000", config, "server", true)
+if err != nil {
+    log.Fatal(err)
 }
 ```
 

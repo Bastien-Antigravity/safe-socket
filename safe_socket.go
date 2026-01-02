@@ -6,10 +6,8 @@ import (
 	"github.com/Bastien-Antigravity/safe-socket/src/models"
 )
 
-const (
-	// Version is the current version of the library.
-	Version = "v1.4.0"
-)
+// Version is the current version of the library.
+const Version = "v1.4.1"
 
 // Socket is an alias for the Facade to simplify usage.
 type Socket = interfaces.Socket
@@ -29,6 +27,12 @@ type Socket = interfaces.Socket
 func Create(profileName, address, publicIP string, socketType string, autoConnect bool) (Socket, error) {
 	// We delegate to the factory
 	return factory.Create(profileName, address, publicIP, socketType, autoConnect)
+}
+
+// CreateWithConfig creates a new socket with full configuration control.
+// Use this to set Deadlines or other advanced config options.
+func CreateWithConfig(profileName, address string, config models.SocketConfig, socketType string, autoConnect bool) (Socket, error) {
+	return factory.CreateWithConfig(profileName, address, config, socketType, autoConnect)
 }
 
 // -----------------------------------------------------------------------------
