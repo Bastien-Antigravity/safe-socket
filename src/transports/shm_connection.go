@@ -27,12 +27,13 @@ const (
 
 // ShmTransport implements a Shared Memory Ring Buffer transport.
 type ShmTransport struct {
-	File    *os.File
-	MMap    mmap.MMap
-	Head    *uint64 // Pointer to shared memory Head
-	Tail    *uint64 // Pointer to shared memory Tail
-	Data    []byte  // Slice pointing to shared data region
-	Timeout time.Duration
+	File          *os.File
+	MMap          mmap.MMap
+	Head          *uint64 // Pointer to shared memory Head
+	Tail          *uint64 // Pointer to shared memory Tail
+	Data          []byte  // Slice pointing to shared data region
+	readDeadline  time.Time
+	writeDeadline time.Time
 }
 
 // -----------------------------------------------------------------------------
@@ -49,14 +50,43 @@ func NewShmTransport(f *os.File, m mmap.MMap, timeout time.Duration) *ShmTranspo
 	tailPtr := unsafe.Pointer(&m[8])
 	tail := (*uint64)(tailPtr)
 
-	return &ShmTransport{
-		File:    f,
-		MMap:    m,
-		Head:    head,
-		Tail:    tail,
-		Data:    m[MetaSize:],
-		Timeout: timeout,
+	t := &ShmTransport{
+		File: f,
+		MMap: m,
+		Head: head,
+		Tail: tail,
+		Data: m[MetaSize:],
 	}
+
+	if timeout > 0 {
+		deadline := time.Now().Add(timeout)
+		t.readDeadline = deadline
+		t.writeDeadline = deadline
+	}
+
+	return t
+}
+
+// -----------------------------------------------------------------------------
+
+func (t *ShmTransport) SetDeadline(deadline time.Time) error {
+	t.readDeadline = deadline
+	t.writeDeadline = deadline
+	return nil
+}
+
+// -----------------------------------------------------------------------------
+
+func (t *ShmTransport) SetReadDeadline(deadline time.Time) error {
+	t.readDeadline = deadline
+	return nil
+}
+
+// -----------------------------------------------------------------------------
+
+func (t *ShmTransport) SetWriteDeadline(deadline time.Time) error {
+	t.writeDeadline = deadline
+	return nil
 }
 
 // -----------------------------------------------------------------------------
@@ -70,11 +100,6 @@ func (t *ShmTransport) Write(p []byte) (n int, err error) {
 	}
 
 	// 1. Check available space
-	// We use standard ring buffer arithmetic.
-	// We only wrap Tail virtually (Tail keeps increasing).
-	// Actual index = Tail % BufferDataSize.
-
-	deadline := time.Now().Add(t.Timeout)
 	for {
 		tail := atomic.LoadUint64(t.Tail) // Where we want to write
 		head := atomic.LoadUint64(t.Head) // Where consumer is
@@ -82,7 +107,8 @@ func (t *ShmTransport) Write(p []byte) (n int, err error) {
 		// Capacity check: Tail - Head < BufferDataSize
 		if tail-head+lenData > BufferDataSize {
 			// Full. Spin-wait.
-			if t.Timeout > 0 && time.Now().After(deadline) {
+			// OPTIMIZATION: Check deadline ONLY when blocked
+			if !t.writeDeadline.IsZero() && time.Now().After(t.writeDeadline) {
 				return 0, os.ErrDeadlineExceeded
 			}
 			time.Sleep(1 * time.Microsecond) // Polite spin
@@ -117,16 +143,17 @@ func (t *ShmTransport) Write(p []byte) (n int, err error) {
 // Read (Consumer Role)
 func (t *ShmTransport) Read(p []byte) (n int, err error) {
 	// Blocking Read
-	deadline := time.Now().Add(t.Timeout)
 	for {
 		tail := atomic.LoadUint64(t.Tail)
 		head := atomic.LoadUint64(t.Head)
 
 		if head == tail {
 			// Empty. Spin-wait.
-			if t.Timeout > 0 && time.Now().After(deadline) {
+			// OPTIMIZATION: Check deadline ONLY when blocked
+			if !t.readDeadline.IsZero() && time.Now().After(t.readDeadline) {
 				return 0, os.ErrDeadlineExceeded
 			}
+
 			time.Sleep(1 * time.Microsecond)
 			continue
 		}
@@ -167,14 +194,14 @@ func (t *ShmTransport) Read(p []byte) (n int, err error) {
 // It acts as a "Frame Read" if the producer writes in frames, but technically it reads "everything available".
 func (t *ShmTransport) ReadMessage() ([]byte, error) {
 	// Blocking Read logic duplicated from Read() but with allocation
-	deadline := time.Now().Add(t.Timeout)
 	for {
 		tail := atomic.LoadUint64(t.Tail)
 		head := atomic.LoadUint64(t.Head)
 
 		if head == tail {
 			// Empty. Spin-wait.
-			if t.Timeout > 0 && time.Now().After(deadline) {
+			// OPTIMIZATION: Check deadline ONLY when blocked
+			if !t.readDeadline.IsZero() && time.Now().After(t.readDeadline) {
 				return nil, os.ErrDeadlineExceeded
 			}
 			time.Sleep(1 * time.Microsecond)
@@ -227,6 +254,8 @@ func (t *ShmTransport) LocalAddr() net.Addr {
 func (t *ShmTransport) RemoteAddr() net.Addr {
 	return ShmAddr{}
 }
+
+// -----------------------------------------------------------------------------
 
 // ShmAddr implements net.Addr for Shared Memory.
 type ShmAddr struct{}

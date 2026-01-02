@@ -142,6 +142,36 @@ func (c *SocketClient) Close() error {
 
 // -----------------------------------------------------------------------------
 
+// SetDeadline sets the read and write deadlines associated with the connection.
+func (c *SocketClient) SetDeadline(t time.Time) error {
+	if c.transport == nil {
+		return errors.New("socket not open")
+	}
+	return c.transport.SetDeadline(t)
+}
+
+// -----------------------------------------------------------------------------
+
+// SetReadDeadline sets the deadline for future Read calls.
+func (c *SocketClient) SetReadDeadline(t time.Time) error {
+	if c.transport == nil {
+		return errors.New("socket not open")
+	}
+	return c.transport.SetReadDeadline(t)
+}
+
+// -----------------------------------------------------------------------------
+
+// SetWriteDeadline sets the deadline for future Write calls.
+func (c *SocketClient) SetWriteDeadline(t time.Time) error {
+	if c.transport == nil {
+		return errors.New("socket not open")
+	}
+	return c.transport.SetWriteDeadline(t)
+}
+
+// -----------------------------------------------------------------------------
+
 // Bind logger to safe-socket
 func (c *SocketClient) SetLogger(logger *interfaces.Logger) {
 	c.Logger = logger

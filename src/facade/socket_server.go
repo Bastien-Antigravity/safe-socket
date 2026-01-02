@@ -17,6 +17,7 @@ import (
 // does not send/receive data directly; the *accepted connection* does.
 type SocketServer struct {
 	Profile  interfaces.SocketProfile
+	Config   models.SocketConfig
 	listener interfaces.TransportListener
 	Logger   *interfaces.Logger
 }
@@ -24,9 +25,10 @@ type SocketServer struct {
 // -----------------------------------------------------------------------------
 
 // NewSocketServer creates a new instance of SocketServer.
-func NewSocketServer(p interfaces.SocketProfile) *SocketServer {
+func NewSocketServer(p interfaces.SocketProfile, config models.SocketConfig) *SocketServer {
 	return &SocketServer{
 		Profile: p,
+		Config:  config,
 	}
 }
 
@@ -76,15 +78,21 @@ func (s *SocketServer) Accept() (interfaces.TransportConnection, error) {
 		return nil, err
 	}
 
+	// 1b. Apply Server Config Deadline (Factory Default)
+	if s.Config.Deadline > 0 {
+		deadline := time.Now().Add(s.Config.Deadline)
+		if err := conn.SetDeadline(deadline); err != nil {
+			conn.Close()
+			return nil, err
+		}
+	}
+
 	// 2. Encapsulation / Handshake Logic
 	// Case A: UDP + Hello (Stateless Envelope)
 	if s.Profile.GetTransport() == interfaces.TransportUDP &&
 		s.Profile.GetProtocol() == interfaces.ProtocolHello {
 
 		// Wrap connection to handle Per-Packet Decapsulation
-		// Note: 'conn' here is a TransientUdpSocket containing the first packet.
-		// The first Read() on EnvelopedConnection will read that packet from TransientSocket,
-		// Decapsulate it, and return the Payload.
 		config := models.SocketConfig{} // Server doesn't usually use config for receiving, but wrapper needs it struct
 		conn = NewEnvelopedConnection(conn, s.Profile, config)
 
@@ -95,6 +103,7 @@ func (s *SocketServer) Accept() (interfaces.TransportConnection, error) {
 		// Currently only one protocol supported
 		proto = protocols.NewHelloProtocol()
 
+		// Note: The handshake itself will respect the Deadline set in 1b because it uses Read/Write on the conn.
 		helloMsg, err := proto.WaitInitiation(conn)
 		if err != nil {
 			conn.Close()
@@ -149,4 +158,16 @@ func (s *SocketServer) Receive() ([]byte, error) {
 
 func (s *SocketServer) Read(p []byte) (int, error) {
 	return 0, errors.New("method Read not supported for Server socket")
+}
+
+func (s *SocketServer) SetDeadline(t time.Time) error {
+	return errors.New("method SetDeadline not supported for Server listener (use Config.Deadline for accepted conns)")
+}
+
+func (s *SocketServer) SetReadDeadline(t time.Time) error {
+	return errors.New("method SetReadDeadline not supported for Server listener")
+}
+
+func (s *SocketServer) SetWriteDeadline(t time.Time) error {
+	return errors.New("method SetWriteDeadline not supported for Server listener")
 }

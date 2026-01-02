@@ -3,6 +3,7 @@ package interfaces
 import (
 	"io"
 	"net"
+	"time"
 )
 
 // TransportConnection defines a connection that can handle low-level I/O.
@@ -21,6 +22,11 @@ type TransportConnection interface {
 	// Read implemented in io.ReadWriteCloser
 	// ReadMessage reads a complete frame/packet and returns it in a newly allocated buffer.
 	ReadMessage() ([]byte, error)
+
+	// Deadlines
+	SetDeadline(t time.Time) error
+	SetReadDeadline(t time.Time) error
+	SetWriteDeadline(t time.Time) error
 }
 
 // TransportListener defines a listener that waits for incoming connections.

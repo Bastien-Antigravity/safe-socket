@@ -117,7 +117,7 @@ func CreateSocket(p interfaces.SocketProfile, config models.SocketConfig, socket
 	if st == interfaces.SocketTypeClient {
 		return facade.NewSocketClient(p, config), nil
 	}
-	return facade.NewSocketServer(p), nil
+	return facade.NewSocketServer(p, config), nil
 }
 
 func parseSocketType(t string) (interfaces.SocketType, error) {

@@ -3,7 +3,7 @@
 **Safe Socket** is a high-performance, robust socket library for Go. It provides a reliable abstraction over **TCP**, **UDP**, and **Shared Memory (SHM)** transports with a flexible, profile-based configuration system.
 
 ## Version
-Current Version: `v1.3.0`
+Current Version: `v1.4.0`
 
 ## Installation
 
@@ -52,8 +52,16 @@ func main() {
 
     // Receive Data (Dynamic Buffer)
     // Receive() automatically allocates the correct size.
-    msg, _ := socket.Receive()
-    log.Printf("Received: %s", string(msg))
+    // Set a Deadline for the read operation
+    socket.SetReadDeadline(time.Now().Add(2 * time.Second))
+    
+    msg, err := socket.Receive()
+    if err != nil {
+        // Handle timeout
+        log.Printf("Receive failed: %v", err)
+    } else {
+        log.Printf("Received: %s", string(msg))
+    }
 
     // Alternative: Use Read() for fixed buffers (io.Reader compliant)
     // buf := make([]byte, 1024)

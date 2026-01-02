@@ -3,6 +3,7 @@ package facade
 import (
 	"errors"
 	"net"
+	"time"
 
 	"github.com/Bastien-Antigravity/safe-socket/src/interfaces"
 	"github.com/Bastien-Antigravity/safe-socket/src/models"
@@ -130,6 +131,24 @@ func (e *EnvelopedConnection) LocalAddr() net.Addr {
 // RemoteAddr returns the remote network address.
 func (e *EnvelopedConnection) RemoteAddr() net.Addr {
 	return e.Conn.RemoteAddr()
+}
+
+// -----------------------------------------------------------------------------
+
+func (e *EnvelopedConnection) SetDeadline(t time.Time) error {
+	return e.Conn.SetDeadline(t)
+}
+
+// -----------------------------------------------------------------------------
+
+func (e *EnvelopedConnection) SetReadDeadline(t time.Time) error {
+	return e.Conn.SetReadDeadline(t)
+}
+
+// -----------------------------------------------------------------------------
+
+func (e *EnvelopedConnection) SetWriteDeadline(t time.Time) error {
+	return e.Conn.SetWriteDeadline(t)
 }
 
 // -----------------------------------------------------------------------------

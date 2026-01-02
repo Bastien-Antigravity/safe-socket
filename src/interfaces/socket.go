@@ -1,5 +1,9 @@
 package interfaces
 
+import (
+	"time"
+)
+
 // -----------------------------------------------------------------------------
 
 // SocketType defines the role of the socket (Client or Server).
@@ -29,6 +33,11 @@ type Socket interface {
 	Read(p []byte) (int, error)
 	// custom Read method, simpler to use than Read(p []byte)
 	Receive() ([]byte, error)
+
+	// Deadlines (Simulating net.Conn behavior)
+	SetDeadline(t time.Time) error
+	SetReadDeadline(t time.Time) error
+	SetWriteDeadline(t time.Time) error
 
 	// Server Methods
 	Listen() error

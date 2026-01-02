@@ -11,19 +11,34 @@ import (
 // FramedTCPSocket implements interfaces.TransportConnection.
 // It uses a 4-byte BigEndian length header for every write.
 type FramedTCPSocket struct {
-	Conn    net.Conn
-	reader  *bufio.Reader
-	Timeout time.Duration
+	Conn   net.Conn
+	reader *bufio.Reader
 }
 
 // -----------------------------------------------------------------------------
 
 func NewFramedTCPSocket(conn net.Conn, timeout time.Duration) *FramedTCPSocket {
-	return &FramedTCPSocket{
-		Conn:    conn,
-		reader:  bufio.NewReader(conn),
-		Timeout: timeout,
+	// Note: 'timeout' argument is now effectively ignored for the persistent socket logic
+	// in favor of explicit SetDeadline calls by the user/server,
+	// BUT to maintain backward compatibility or initial setup, we *could* set it once.
+	// As per plan, we remove internal Timeout field logic.
+	// However, the Constructor signature `NewFramedTCPSocket` is used by the listener.
+	// We will respect it as an initial deadline IF provided, but strictly we are removing the
+	// "refresh deadline on every call" logic.
+
+	s := &FramedTCPSocket{
+		Conn:   conn,
+		reader: bufio.NewReader(conn),
 	}
+
+	// If a timeout was requested at creation (legacy/listener), set it as an initial deadline?
+	// The listener passes 'timeout'. If we want to support the "Server Config Deadline"
+	// effectively, the Listener does pass it here.
+	if timeout > 0 {
+		_ = conn.SetDeadline(time.Now().Add(timeout))
+	}
+
+	return s
 }
 
 // -----------------------------------------------------------------------------
@@ -71,11 +86,29 @@ func (s *FramedTCPSocket) SetWriteBuffer(bytes int) error {
 
 // -----------------------------------------------------------------------------
 
+// SetDeadline sets the read and write deadlines associated with the connection.
+func (s *FramedTCPSocket) SetDeadline(t time.Time) error {
+	return s.Conn.SetDeadline(t)
+}
+
+// -----------------------------------------------------------------------------
+
+// SetReadDeadline sets the deadline for future Read calls.
+func (s *FramedTCPSocket) SetReadDeadline(t time.Time) error {
+	return s.Conn.SetReadDeadline(t)
+}
+
+// -----------------------------------------------------------------------------
+
+// SetWriteDeadline sets the deadline for future Write calls.
+func (s *FramedTCPSocket) SetWriteDeadline(t time.Time) error {
+	return s.Conn.SetWriteDeadline(t)
+}
+
+// -----------------------------------------------------------------------------
+
 // Write prepends length and writes data.
 func (s *FramedTCPSocket) Write(p []byte) (n int, err error) {
-	if s.Timeout > 0 {
-		_ = s.Conn.SetWriteDeadline(time.Now().Add(s.Timeout))
-	}
 
 	// 1. Prepare Header (4 bytes length)Endian)
 	header := make([]byte, 4)
@@ -96,10 +129,6 @@ func (s *FramedTCPSocket) Write(p []byte) (n int, err error) {
 // Read expects a 4-byte BigEndian length header, then reads that many bytes.
 // SAFE UPDATE: Uses Peek/Discard to ensure header is not lost if buffer is too short.
 func (s *FramedTCPSocket) Read(p []byte) (n int, err error) {
-	if s.Timeout > 0 {
-		_ = s.Conn.SetReadDeadline(time.Now().Add(s.Timeout))
-	}
-
 	// 1. Peek content check
 	// We need 4 bytes for header.
 	header, err := s.reader.Peek(4)
@@ -130,10 +159,6 @@ func (s *FramedTCPSocket) Read(p []byte) (n int, err error) {
 
 // ReadMessage implements the dynamic read.
 func (s *FramedTCPSocket) ReadMessage() ([]byte, error) {
-	if s.Timeout > 0 {
-		_ = s.Conn.SetReadDeadline(time.Now().Add(s.Timeout))
-	}
-
 	// 1. Read Length (Must use reader to avoid skipping buffered data)
 	header := make([]byte, 4)
 	if _, err := io.ReadFull(s.reader, header); err != nil {

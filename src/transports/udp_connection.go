@@ -7,9 +7,11 @@ import (
 
 // UdpSocket implements interfaces.TransportConnection over UDP.
 // Note: UDP is unreliable and unordered.
+// UdpSocket implements interfaces.TransportConnection over UDP.
+// Note: UDP is unreliable and unordered.
 type UdpSocket struct {
-	Conn    *net.UDPConn
-	Timeout time.Duration
+	Conn *net.UDPConn
+	// Timeout time.Duration // Removed in favor of explicit SetDeadline
 
 	// Server-Side: "Transient" socket fields
 	TransientRemoteAddr *net.UDPAddr // If set, Write() uses WriteToUDP
@@ -19,17 +21,26 @@ type UdpSocket struct {
 // -----------------------------------------------------------------------------
 
 func NewUdpSocket(conn *net.UDPConn, timeout time.Duration) *UdpSocket {
+	if timeout > 0 {
+		_ = conn.SetDeadline(time.Now().Add(timeout))
+	}
 	return &UdpSocket{
-		Conn:    conn,
-		Timeout: timeout,
+		Conn: conn,
 	}
 }
 
 // NewTransientUdpSocket creates a socket representing a single packet from a sender.
 func NewTransientUdpSocket(conn *net.UDPConn, addr *net.UDPAddr, data []byte, timeout time.Duration) *UdpSocket {
+	// Transient socket inherits the underlying conn's state usually, but
+	// if we want to enforce the specific timeout on this "session", we might set it.
+	// However, sharing the conn means sharing the deadline.
+	// For now, we apply it if provided.
+	if timeout > 0 {
+		_ = conn.SetDeadline(time.Now().Add(timeout))
+	}
+
 	return &UdpSocket{
 		Conn:                conn,
-		Timeout:             timeout,
 		TransientRemoteAddr: addr,
 		RecvBuf:             data,
 	}
@@ -41,9 +52,7 @@ func NewTransientUdpSocket(conn *net.UDPConn, addr *net.UDPAddr, data []byte, ti
 // Warning: Messages larger than MTU (usually 1500 bytes) will be fragmented.
 // Messages larger than 64KB will fail.
 func (s *UdpSocket) Write(p []byte) (n int, err error) {
-	if s.Timeout > 0 {
-		_ = s.Conn.SetWriteDeadline(time.Now().Add(s.Timeout))
-	}
+	// OPTIMIZATION: Removed SetWriteDeadline logic from hot path.
 
 	// If this is a transient server socket, reply to the specific remote address
 	if s.TransientRemoteAddr != nil {
@@ -66,9 +75,7 @@ func (s *UdpSocket) Read(p []byte) (n int, err error) {
 		return n, nil
 	}
 
-	if s.Timeout > 0 {
-		_ = s.Conn.SetReadDeadline(time.Now().Add(s.Timeout))
-	}
+	// OPTIMIZATION: Removed SetReadDeadline logic from hot path.
 	return s.Conn.Read(p)
 }
 
@@ -85,9 +92,7 @@ func (s *UdpSocket) ReadMessage() ([]byte, error) {
 		return result, nil
 	}
 
-	if s.Timeout > 0 {
-		_ = s.Conn.SetReadDeadline(time.Now().Add(s.Timeout))
-	}
+	// OPTIMIZATION: Removed SetReadDeadline logic from hot path.
 
 	// Max UDP packet size is technically ~65535.
 	// We allocate a temp buffer.
@@ -115,6 +120,27 @@ func (s *UdpSocket) ReadMessage() ([]byte, error) {
 
 func (s *UdpSocket) Close() error {
 	return s.Conn.Close()
+}
+
+// -----------------------------------------------------------------------------
+
+// SetDeadline sets the read and write deadlines.
+func (s *UdpSocket) SetDeadline(t time.Time) error {
+	return s.Conn.SetDeadline(t)
+}
+
+// -----------------------------------------------------------------------------
+
+// SetReadDeadline sets the read deadline.
+func (s *UdpSocket) SetReadDeadline(t time.Time) error {
+	return s.Conn.SetReadDeadline(t)
+}
+
+// -----------------------------------------------------------------------------
+
+// SetWriteDeadline sets the write deadline.
+func (s *UdpSocket) SetWriteDeadline(t time.Time) error {
+	return s.Conn.SetWriteDeadline(t)
 }
 
 // -----------------------------------------------------------------------------
