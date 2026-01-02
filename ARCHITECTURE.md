@@ -5,24 +5,35 @@
 ## High-Level Overview
 
 ```mermaid
-graph TD
-    User[User Application] --> Factory["Factory (Create/CreateSocket)"]
-    Factory --> Facade[Facade Layer]
+flowchart TD
+    %% Styles
+    classDef core fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1;
+    classDef net fill:#fff8e1,stroke:#fbc02d,stroke-width:2px,color:#f57f17;
+    
+    %% Application Node Styling
+    style User fill:#37474f,stroke:#263238,stroke-width:3px,color:#ffffff
+
+    User[User Application] --> Factory["Factory (Create/CreateSocket)"]:::core
+    Factory --> Facade[Facade Layer]:::core
     
     subgraph Facade Layer
-        Client[SocketClient]
-        Server[SocketServer]
+        direction TB
+        Client[SocketClient]:::core
+        Server[SocketServer]:::core
     end
+    style Facade fill:#edf7ff,stroke:#82b1ff,stroke-width:2px,color:#0d47a1
     
-    Facade --> Protocol["Protocol Layer (Optional)"]
-    Facade --> Transport[Transport Layer]
+    Facade --> Protocol["Protocol Layer (Optional)"]:::net
+    Facade --> Transport[Transport Layer]:::net
     Protocol --> Transport
     
     subgraph Transport Layer
-        TCP[Framed TCP]
-        UDP[UDP / Transient]
-        SHM[Shared Memory Ring Buffer]
+        direction TB
+        TCP[Framed TCP]:::net
+        UDP[UDP / Transient]:::net
+        SHM[Shared Memory Ring Buffer]:::net
     end
+    style Transport fill:#fffde7,stroke:#fff176,stroke-width:2px,color:#f57f17
 ```
 
 ## Layers
