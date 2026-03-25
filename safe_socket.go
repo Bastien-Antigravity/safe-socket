@@ -1,4 +1,4 @@
-package safesocket
+﻿package safesocket
 
 import (
 	"github.com/Bastien-Antigravity/safe-socket/src/factory"
@@ -6,8 +6,6 @@ import (
 	"github.com/Bastien-Antigravity/safe-socket/src/models"
 )
 
-// Version is the current version of the library.
-const Version = "v1.4.1"
 
 // Socket is an alias for the Facade to simplify usage.
 type Socket = interfaces.Socket
