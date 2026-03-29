@@ -1,0 +1,17 @@
+services:
+  safe-socket:
+    build: .
+    image: safe-socket:latest
+    container_name: safe-socket
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      # Inject OS level variables
+      - SAFE_SOCKET_PORT
+      - SAFE_SOCKET_LOG_LEVEL
+
+networks:
+  default:
+    name: teleremote_network
+    external: true
