@@ -1,4 +1,4 @@
-﻿package safesocket
+package safesocket
 
 import (
 	"github.com/Bastien-Antigravity/safe-socket/src/factory"
