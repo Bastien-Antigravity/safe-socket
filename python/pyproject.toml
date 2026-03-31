@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "safe-socket"
+version = "0.1.0"
+description = "Python bindings for the safe-socket Go library"
+readme = "README.md"
+authors = [
+    { name = "Bastien Antigravity" }
+]
+dependencies = []
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["safesocket*"]
+
+[tool.setuptools.package-data]
+safesocket = ["*.so", "*.dylib", "*.dll"]

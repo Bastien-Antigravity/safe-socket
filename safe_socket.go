@@ -6,7 +6,6 @@ import (
 	"github.com/Bastien-Antigravity/safe-socket/src/models"
 )
 
-
 // Socket is an alias for the Facade to simplify usage.
 type Socket = interfaces.Socket
 
@@ -36,10 +35,12 @@ func CreateWithConfig(profileName, address string, config models.SocketConfig, s
 // -----------------------------------------------------------------------------
 
 // Expose other useful types if necessary
-type SocketConfig = models.SocketConfig
-type SocketProfile = interfaces.SocketProfile
-type TransportType = interfaces.TransportType
-type ProtocolType = interfaces.ProtocolType
+type (
+	SocketConfig  = models.SocketConfig
+	SocketProfile = interfaces.SocketProfile
+	TransportType = interfaces.TransportType
+	ProtocolType  = interfaces.ProtocolType
+)
 
 // -----------------------------------------------------------------------------
 
