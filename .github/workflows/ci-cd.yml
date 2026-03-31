@@ -1,0 +1,24 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'                # use your current Go version
+      - run: go mod download
+      - run: go build ./...
+      - run: go test -race -coverprofile=coverage.out ./...
+      - run: go vet ./...
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4    # optional, remove if you don't use Codecov
+        with:
+          file: coverage.out
