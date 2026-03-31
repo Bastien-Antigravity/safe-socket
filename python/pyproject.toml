@@ -28,3 +28,4 @@ include = ["safesocket*"]
 
 [tool.setuptools.package-data]
 safesocket = ["*.so", "*.dylib", "*.dll"]
+
