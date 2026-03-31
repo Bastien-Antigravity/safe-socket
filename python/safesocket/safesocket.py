@@ -44,14 +44,14 @@ lib.SocketAccept.restype = ctypes.c_int32
 lib.SocketSetDeadline.argtypes = [ctypes.c_int32, ctypes.c_double]
 lib.SocketSetDeadline.restype = ctypes.c_int32
 
-lib.GetLastError.argtypes = []
-lib.GetLastError.restype = ctypes.c_char_p
+lib.GetSocketError.argtypes = []
+lib.GetSocketError.restype = ctypes.c_char_p
 
 class SafeSocketError(Exception):
     pass
 
 def _get_last_error() -> str:
-    err_ptr = lib.GetLastError()
+    err_ptr = lib.GetSocketError()
     if err_ptr:
         return err_ptr.decode('utf-8')
     return "Unknown error"

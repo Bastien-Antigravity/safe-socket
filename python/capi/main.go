@@ -41,8 +41,8 @@ func Unregister(handle int32) {
 	registry.Delete(handle)
 }
 
-//export GetLastError
-func GetLastError() *C.char {
+//export GetSocketError
+func GetSocketError() *C.char {
 	return (*C.char)(unsafe.Pointer(&lastError[0]))
 }
 
