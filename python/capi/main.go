@@ -18,7 +18,7 @@ import (
 var (
 	registry    sync.Map
 	nextHandle  int32
-	lastError   string
+	lastError   [1024]byte
 	registryMut sync.Mutex
 )
 
@@ -43,14 +43,19 @@ func Unregister(handle int32) {
 
 //export GetLastError
 func GetLastError() *C.char {
-	return C.CString(lastError)
+	return (*C.char)(unsafe.Pointer(&lastError[0]))
 }
 
 func setError(err error) {
 	if err != nil {
-		lastError = err.Error()
+		s := err.Error()
+		if len(s) > 1023 {
+			s = s[:1023]
+		}
+		copy(lastError[:], s)
+		lastError[len(s)] = 0
 	} else {
-		lastError = ""
+		lastError[0] = 0
 	}
 }
 

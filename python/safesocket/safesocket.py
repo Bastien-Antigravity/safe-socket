@@ -115,7 +115,7 @@ class SafeSocket:
         self.close()
 
 class SafeSocketConnection:
-    def __init__(self, handle: int32):
+    def __init__(self, handle: int):
         self.handle = handle
         self._closed = False
 

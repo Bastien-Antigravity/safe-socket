@@ -159,8 +159,48 @@ if ec, ok := conn.(*facade.EnvelopedConnection); ok {
 }
 ```
 
-## Contributing
-Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
 
-## License
-[MIT](https://choosealicense.com/licenses/mit/)
+## Python Bindings
+
+`safe-socket` is also available as a Python library, providing the same high-level API.
+
+### Installation
+
+You can install it directly from the GitHub repository:
+
+```bash
+pip install git+https://github.com/Bastien-Antigravity/safe-socket.git#egg=safe-socket&subdirectory=python
+```
+
+*Note: Ensure you have Go installed on your system as it is required to compile the underlying shared library during installation.*
+
+
+Or download a pre-built wheel from [GitHub Releases](https://github.com/Bastien-Antigravity/safe-socket/releases) and install it:
+
+```bash
+# Example for a downloaded wheel
+pip install safe_socket-0.1.0-py3-none-macosx_11_0_arm64.whl
+```
+
+### Usage Example
+
+```python
+from safesocket import safesocket
+
+# Create and open a client
+with safesocket.create(profile="tcp-hello", address="127.0.0.1:9000", public_ip="1.2.3.4") as client:
+    client.open()
+    client.send(b"Hello from Python!")
+    response = client.receive()
+    print(f"Received: {response.decode()}")
+
+# Server side
+server = safesocket.create(profile="tcp", address="0.0.0.0:9000", socket_type="server")
+server.listen()
+conn = server.accept()
+with conn:
+    data = conn.receive()
+    conn.send(b"Echo: " + data)
+server.close()
+```
+
