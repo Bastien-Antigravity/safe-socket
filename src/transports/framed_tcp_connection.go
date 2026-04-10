@@ -133,55 +133,72 @@ func (s *FramedTCPSocket) Write(p []byte) (n int, err error) {
 
 // Read expects a 4-byte BigEndian length header, then reads that many bytes.
 // SAFE UPDATE: Uses Peek/Discard to ensure header is not lost if buffer is too short.
+// HEARTBEAT UPDATE: Automatically skips frames with length 0.
 func (s *FramedTCPSocket) Read(p []byte) (n int, err error) {
-	s.refreshDeadline()
-	// 1. Peek content check
-	// We need 4 bytes for header.
-	header, err := s.reader.Peek(4)
-	if err != nil {
-		return 0, err
+	for {
+		s.refreshDeadline()
+		// 1. Peek content check
+		// We need 4 bytes for header.
+		header, err := s.reader.Peek(4)
+		if err != nil {
+			return 0, err
+		}
+
+		// 2. Decode Length
+		length := binary.BigEndian.Uint32(header)
+
+		// HEARTBEAT: Length 0 frames are heartbeats. Discard and continue.
+		if length == 0 {
+			if _, err := s.reader.Discard(4); err != nil {
+				return 0, err
+			}
+			continue
+		}
+
+		// 3. Check Buffer Size BEFORE consuming header
+		if uint32(len(p)) < length {
+			return 0, io.ErrShortBuffer
+		}
+
+		// 4. Safe to proceed: Consume Header
+		if _, err := s.reader.Discard(4); err != nil {
+			return 0, err
+		}
+
+		// 5. Read Body
+		return io.ReadFull(s.reader, p[:length])
 	}
-
-	// 2. Decode Length
-	length := binary.BigEndian.Uint32(header)
-
-	// 3. Check Buffer Size BEFORE consuming header
-	if uint32(len(p)) < length {
-		return 0, io.ErrShortBuffer
-	}
-
-	// 4. Safe to proceed: Consume Header
-	if _, err := s.reader.Discard(4); err != nil {
-		// Should not happen if Peek succeeded, unless connection closed in between micro-ops
-		return 0, err
-	}
-
-	// 5. Read Body
-	// We use ReadFull directly on the bufio reader.
-	return io.ReadFull(s.reader, p[:length])
 }
 
 // -----------------------------------------------------------------------------
 
 // ReadMessage implements the dynamic read.
+// HEARTBEAT UPDATE: Automatically skips frames with length 0.
 func (s *FramedTCPSocket) ReadMessage() ([]byte, error) {
-	s.refreshDeadline()
-	// 1. Read Length (Must use reader to avoid skipping buffered data)
-	header := make([]byte, 4)
-	if _, err := io.ReadFull(s.reader, header); err != nil {
-		return nil, err
+	for {
+		s.refreshDeadline()
+		// 1. Read Length
+		header := make([]byte, 4)
+		if _, err := io.ReadFull(s.reader, header); err != nil {
+			return nil, err
+		}
+		length := binary.BigEndian.Uint32(header)
+
+		// HEARTBEAT: Length 0 frames are heartbeats. Skip to next message.
+		if length == 0 {
+			continue
+		}
+
+		// 2. Allocate exact size
+		buf := make([]byte, length)
+
+		// 3. Read Body
+		if _, err := io.ReadFull(s.reader, buf); err != nil {
+			return nil, err
+		}
+
+		return buf, nil
 	}
-	length := binary.BigEndian.Uint32(header)
-
-	// 2. Allocate exact size
-	buf := make([]byte, length)
-
-	// 3. Read Body
-	if _, err := io.ReadFull(s.reader, buf); err != nil {
-		return nil, err
-	}
-
-	return buf, nil
 }
 
 // -----------------------------------------------------------------------------

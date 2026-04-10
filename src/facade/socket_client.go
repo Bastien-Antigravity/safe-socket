@@ -94,9 +94,12 @@ func (c *SocketClient) Open() error {
 		}
 	}
 
-	c.transport = conn
+	c.transport = NewHeartbeatConnection(conn)
+
 	return nil
 }
+
+// -----------------------------------------------------------------------------
 
 // -----------------------------------------------------------------------------
 

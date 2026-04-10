@@ -114,7 +114,7 @@ func (s *SocketServer) Accept() (interfaces.TransportConnection, error) {
 		conn = NewHandshakeConnection(conn, helloMsg)
 	}
 
-	return conn, nil
+	return NewHeartbeatConnection(conn), nil
 }
 
 // -----------------------------------------------------------------------------
