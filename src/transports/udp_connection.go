@@ -10,8 +10,8 @@ import (
 // UdpSocket implements interfaces.TransportConnection over UDP.
 // Note: UDP is unreliable and unordered.
 type UdpSocket struct {
-	Conn *net.UDPConn
-	// Timeout time.Duration // Removed in favor of explicit SetDeadline
+	Conn        *net.UDPConn
+	idleTimeout time.Duration
 
 	// Server-Side: "Transient" socket fields
 	TransientRemoteAddr *net.UDPAddr // If set, Write() uses WriteToUDP
@@ -21,29 +21,37 @@ type UdpSocket struct {
 // -----------------------------------------------------------------------------
 
 func NewUdpSocket(conn *net.UDPConn, timeout time.Duration) *UdpSocket {
-	if timeout > 0 {
-		_ = conn.SetDeadline(time.Now().Add(timeout))
+	s := &UdpSocket{
+		Conn:        conn,
+		idleTimeout: timeout,
 	}
-	return &UdpSocket{
-		Conn: conn,
-	}
+	s.refreshDeadline()
+	return s
 }
 
 // NewTransientUdpSocket creates a socket representing a single packet from a sender.
 func NewTransientUdpSocket(conn *net.UDPConn, addr *net.UDPAddr, data []byte, timeout time.Duration) *UdpSocket {
-	// Transient socket inherits the underlying conn's state usually, but
-	// if we want to enforce the specific timeout on this "session", we might set it.
-	// However, sharing the conn means sharing the deadline.
-	// For now, we apply it if provided.
-	if timeout > 0 {
-		_ = conn.SetDeadline(time.Now().Add(timeout))
-	}
-
-	return &UdpSocket{
+	s := &UdpSocket{
 		Conn:                conn,
 		TransientRemoteAddr: addr,
 		RecvBuf:             data,
+		idleTimeout:         timeout,
 	}
+	s.refreshDeadline()
+	return s
+}
+
+func (s *UdpSocket) refreshDeadline() {
+	if s.idleTimeout > 0 {
+		_ = s.Conn.SetDeadline(time.Now().Add(s.idleTimeout))
+	}
+}
+
+// SetIdleTimeout updates the internal idle timeout and refreshes the current deadline.
+func (s *UdpSocket) SetIdleTimeout(d time.Duration) error {
+	s.idleTimeout = d
+	s.refreshDeadline()
+	return nil
 }
 
 // -----------------------------------------------------------------------------
@@ -52,6 +60,7 @@ func NewTransientUdpSocket(conn *net.UDPConn, addr *net.UDPAddr, data []byte, ti
 // Warning: Messages larger than MTU (usually 1500 bytes) will be fragmented.
 // Messages larger than 64KB will fail.
 func (s *UdpSocket) Write(p []byte) (n int, err error) {
+	s.refreshDeadline()
 	// OPTIMIZATION: Removed SetWriteDeadline logic from hot path.
 
 	// If this is a transient server socket, reply to the specific remote address
@@ -68,6 +77,7 @@ func (s *UdpSocket) Write(p []byte) (n int, err error) {
 // Read reads a datagram.
 // Note: If 'p' is smaller than the incoming datagram, the excess data is discarded by the OS.
 func (s *UdpSocket) Read(p []byte) (n int, err error) {
+	s.refreshDeadline()
 	// If we have a pre-read buffer (Transient Server Socket), return it immediately
 	if s.RecvBuf != nil {
 		n := copy(p, s.RecvBuf)
@@ -84,6 +94,7 @@ func (s *UdpSocket) Read(p []byte) (n int, err error) {
 // ReadMessage for UDP allocates a buffer large enough for a standard UDP packet (64KB max),
 // reads, and returns the sliced data.
 func (s *UdpSocket) ReadMessage() ([]byte, error) {
+	s.refreshDeadline()
 	// If we have a pre-read buffer (Transient Server Socket), return it immediately
 	if s.RecvBuf != nil {
 		result := make([]byte, len(s.RecvBuf))

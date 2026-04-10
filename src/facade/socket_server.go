@@ -78,13 +78,13 @@ func (s *SocketServer) Accept() (interfaces.TransportConnection, error) {
 		return nil, err
 	}
 
-	// 1b. Apply Server Config Deadline (Factory Default)
-	if s.Config.Deadline > 0 {
-		deadline := time.Now().Add(s.Config.Deadline)
-		if err := conn.SetDeadline(deadline); err != nil {
-			conn.Close()
-			return nil, err
-		}
+	// 1b. Apply Server Config Deadline (Idle Timeout)
+	// If s.Config.Deadline is set (even to 0), we use it as the Idle Timeout.
+	if s.Config.Deadline >= 0 {
+		_ = conn.SetIdleTimeout(s.Config.Deadline)
+	} else {
+		// FALLBACK: If no explicit deadline, use the profile default (ConnectTimeout)
+		_ = conn.SetIdleTimeout(time.Duration(s.Profile.GetConnectTimeout()) * time.Millisecond)
 	}
 
 	// 2. Encapsulation / Handshake Logic

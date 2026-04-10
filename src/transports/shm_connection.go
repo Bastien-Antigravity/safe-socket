@@ -34,6 +34,7 @@ type ShmTransport struct {
 	Data          []byte  // Slice pointing to shared data region
 	readDeadline  time.Time
 	writeDeadline time.Time
+	idleTimeout   time.Duration
 }
 
 // -----------------------------------------------------------------------------
@@ -59,12 +60,25 @@ func NewShmTransport(f *os.File, m mmap.MMap, timeout time.Duration) *ShmTranspo
 	}
 
 	if timeout > 0 {
-		deadline := time.Now().Add(timeout)
+		t.idleTimeout = timeout
+		t.refreshDeadline()
+	}
+	return t
+}
+
+func (t *ShmTransport) refreshDeadline() {
+	if t.idleTimeout > 0 {
+		deadline := time.Now().Add(t.idleTimeout)
 		t.readDeadline = deadline
 		t.writeDeadline = deadline
 	}
+}
 
-	return t
+// SetIdleTimeout updates the internal idle timeout and refreshes the current deadline.
+func (t *ShmTransport) SetIdleTimeout(d time.Duration) error {
+	t.idleTimeout = d
+	t.refreshDeadline()
+	return nil
 }
 
 // -----------------------------------------------------------------------------
@@ -133,6 +147,7 @@ func (t *ShmTransport) Write(p []byte) (n int, err error) {
 		// Commit-Store ensure data is visible before index update (on x86 this is free, on ARM needs barrier)
 		// Go atomic.Store acts as a release barrier.
 		atomic.AddUint64(t.Tail, lenData)
+		t.refreshDeadline()
 
 		return int(lenData), nil
 	}
@@ -183,6 +198,7 @@ func (t *ShmTransport) Read(p []byte) (n int, err error) {
 
 		// Commit: Update Head
 		atomic.AddUint64(t.Head, toRead)
+		t.refreshDeadline()
 
 		return int(toRead), nil
 	}

@@ -1,6 +1,8 @@
 package facade
 
 import (
+	"time"
+
 	"github.com/Bastien-Antigravity/safe-socket/src/interfaces"
 	"github.com/Bastien-Antigravity/safe-socket/src/schemas"
 )
@@ -33,3 +35,7 @@ func NewHandshakeConnection(conn interfaces.TransportConnection, identity *schem
 }
 
 // LocalAddr and RemoteAddr are promoted automatically by embedding.
+
+func (h *HandshakeConnection) SetIdleTimeout(d time.Duration) error {
+	return h.TransportConnection.SetIdleTimeout(d)
+}

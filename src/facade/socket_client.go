@@ -41,19 +41,27 @@ func (c *SocketClient) Open() error {
 	var conn interfaces.TransportConnection
 	var err error
 
-	timeout := time.Duration(c.Profile.GetConnectTimeout()) * time.Millisecond
-	if timeout == 0 {
-		timeout = 5 * time.Second
+	// Connect Timeout (Dial)
+	connectTimeout := time.Duration(c.Profile.GetConnectTimeout()) * time.Millisecond
+	if connectTimeout == 0 {
+		connectTimeout = 5 * time.Second
+	}
+
+	// Idle Timeout (Read/Write)
+	// If Config.Deadline is set (even to 0), we use it as the Idle Timeout.
+	idleTimeout := connectTimeout
+	if c.Config.Deadline >= 0 {
+		idleTimeout = c.Config.Deadline
 	}
 
 	switch c.Profile.GetTransport() {
 	case interfaces.TransportFramedTCP:
-		conn, err = transports.Connect(c.Profile.GetAddress(), timeout)
+		conn, err = transports.Connect(c.Profile.GetAddress(), idleTimeout)
 	case interfaces.TransportShm:
 		// For SHM, we use Name as the identifier/path
-		conn, err = transports.ConnectShm(c.Profile.GetName(), timeout)
+		conn, err = transports.ConnectShm(c.Profile.GetName(), idleTimeout)
 	case interfaces.TransportUDP:
-		conn, err = transports.ConnectUDP(c.Profile.GetAddress(), timeout)
+		conn, err = transports.ConnectUDP(c.Profile.GetAddress(), idleTimeout)
 	default:
 		return errors.New("unsupported transport type")
 	}

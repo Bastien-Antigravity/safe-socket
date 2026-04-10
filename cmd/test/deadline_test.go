@@ -132,3 +132,60 @@ func TestClientDynamicDeadline(t *testing.T) {
 		t.Fatalf("Unexpected msg: %s", msg)
 	}
 }
+
+// TestIdleTimeoutRefresh verifies that sending/receiving data refreshes the deadline.
+func TestIdleTimeoutRefresh(t *testing.T) {
+	addr := "127.0.0.1:9052"
+
+	// 1. Setup Server with short idle timeout (300ms)
+	profile := profiles.NewTcpServerProfile("TcpServer", addr, 5000)
+	config := models.SocketConfig{
+		PublicIP: "127.0.0.1",
+		Deadline: 400 * time.Millisecond,
+	}
+
+	server, _ := factory.CreateSocket(profile, config, "server")
+	_ = server.Listen()
+	defer server.Close()
+
+	done := make(chan struct{})
+	go func() {
+		conn, _ := server.Accept()
+		defer conn.Close()
+
+		// Wait 250ms (before timeout), then Read
+		time.Sleep(250 * time.Millisecond)
+		buf := make([]byte, 1024)
+		_, err := conn.Read(buf)
+		if err != nil {
+			t.Errorf("Server Read failed (unexpected timeout): %v", err)
+		}
+
+		// Wait another 250ms. 
+		// Previous deadline was at 400ms. 
+		// Since we just read at 250ms, the new deadline should be 250 + 400 = 650ms.
+		// So at 250+250 = 500ms, it should STILL be alive.
+		time.Sleep(250 * time.Millisecond)
+		_, err = conn.Read(buf)
+		if err != nil {
+			t.Errorf("Server second Read failed (refresh did not work): %v", err)
+		}
+		close(done)
+	}()
+
+	// 2. Setup Client
+	client, _ := factory.Create("tcp", addr, "", "client", true)
+	defer client.Close()
+
+	// 3. Send PINGs to keep it alive
+	client.Send([]byte("PING1"))
+	time.Sleep(250 * time.Millisecond)
+	client.Send([]byte("PING2"))
+
+	select {
+	case <-done:
+		// Success
+	case <-time.After(2 * time.Second):
+		t.Fatal("Test timed out")
+	}
+}

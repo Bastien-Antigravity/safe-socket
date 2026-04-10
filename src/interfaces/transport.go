@@ -27,6 +27,7 @@ type TransportConnection interface {
 	SetDeadline(t time.Time) error
 	SetReadDeadline(t time.Time) error
 	SetWriteDeadline(t time.Time) error
+	SetIdleTimeout(d time.Duration) error
 }
 
 // TransportListener defines a listener that waits for incoming connections.

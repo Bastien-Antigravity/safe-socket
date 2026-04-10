@@ -151,4 +151,8 @@ func (e *EnvelopedConnection) SetWriteDeadline(t time.Time) error {
 	return e.Conn.SetWriteDeadline(t)
 }
 
+func (e *EnvelopedConnection) SetIdleTimeout(d time.Duration) error {
+	return e.Conn.SetIdleTimeout(d)
+}
+
 // -----------------------------------------------------------------------------

@@ -3,7 +3,7 @@
 **Safe Socket** is a high-performance, robust socket library for Go. It provides a reliable abstraction over **TCP**, **UDP**, and **Shared Memory (SHM)** transports with a flexible, profile-based configuration system.
 
 ## Version
-Current Version: `v1.4.1`
+Current Version: `v1.6.0`
 
 ## Installation
 
@@ -76,8 +76,10 @@ For more control (e.g., setting a default deadline), use `safesocket.CreateWithC
 ```go
 config := models.SocketConfig{
     PublicIP: "1.2.3.4",
-    Deadline: 500 * time.Millisecond, // Enforce 500ms deadline on accepted connections
+    Deadline: 5 * time.Minute, // Idle Timeout: Connection stays alive as long as active
 }
+
+// Note: Use Deadline: 0 for a completely open (infinite) connection.
 
 // CreateWithConfig(profile, address, config, type, autoConnect)
 socket, err := safesocket.CreateWithConfig("tcp-hello", "127.0.0.1:9000", config, "server", true)

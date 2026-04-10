@@ -69,8 +69,9 @@ Handles the low-level I/O.
 
 ### Deadline Management
 Deadlines are handled at two levels:
-1.  **Configuration**: A `Deadline` on `SocketConfig` sets the initial timeout for new server connections (preventing slow-loris attacks or stalled handshakes).
-2.  **Dynamic**: `SetDeadline` methods on the Socket interface allow per-operation control at the application level. To optimize performance, the TCP transport does not refresh deadlines on every call automatically; it relies on explicit user intent or the initial config.
+1.  **Idle Timeout**: The library now uses an "activity-refresh" model. Setting a `Deadline` on `SocketConfig` (or calling `SetIdleTimeout`) establishes a window of inactivity. Every successful `Read`, `Write`, or `ReadMessage` operation automatically pushes the absolute deadline forward by this duration.
+2.  **Explicit Control**: `SetDeadline` methods on the Socket interface allow per-operation absolute control if needed.
+3.  **Infinite Connections**: Setting a `Deadline` of `0` disables all timeouts, allowing for permanent persistent connections.
 
 ### Profile System
 Configuration is driven by `SocketProfile`, which dictates:

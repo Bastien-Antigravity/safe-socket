@@ -11,34 +11,38 @@ import (
 // FramedTCPSocket implements interfaces.TransportConnection.
 // It uses a 4-byte BigEndian length header for every write.
 type FramedTCPSocket struct {
-	Conn   net.Conn
-	reader *bufio.Reader
+	Conn        net.Conn
+	reader      *bufio.Reader
+	idleTimeout time.Duration
 }
 
 // -----------------------------------------------------------------------------
 
 func NewFramedTCPSocket(conn net.Conn, timeout time.Duration) *FramedTCPSocket {
-	// Note: 'timeout' argument is now effectively ignored for the persistent socket logic
-	// in favor of explicit SetDeadline calls by the user/server,
-	// BUT to maintain backward compatibility or initial setup, we *could* set it once.
-	// As per plan, we remove internal Timeout field logic.
-	// However, the Constructor signature `NewFramedTCPSocket` is used by the listener.
-	// We will respect it as an initial deadline IF provided, but strictly we are removing the
-	// "refresh deadline on every call" logic.
-
 	s := &FramedTCPSocket{
-		Conn:   conn,
-		reader: bufio.NewReader(conn),
+		Conn:        conn,
+		reader:      bufio.NewReader(conn),
+		idleTimeout: timeout,
 	}
 
-	// If a timeout was requested at creation (legacy/listener), set it as an initial deadline?
-	// The listener passes 'timeout'. If we want to support the "Server Config Deadline"
-	// effectively, the Listener does pass it here.
-	if timeout > 0 {
-		_ = conn.SetDeadline(time.Now().Add(timeout))
-	}
+	// We no longer set a one-time absolute deadline here.
+	// Instead, the first Read/Write will refresh it if idleTimeout > 0.
+	s.refreshDeadline()
 
 	return s
+}
+
+func (s *FramedTCPSocket) refreshDeadline() {
+	if s.idleTimeout > 0 {
+		_ = s.Conn.SetDeadline(time.Now().Add(s.idleTimeout))
+	}
+}
+
+// SetIdleTimeout updates the internal idle timeout and refreshes the current deadline.
+func (s *FramedTCPSocket) SetIdleTimeout(d time.Duration) error {
+	s.idleTimeout = d
+	s.refreshDeadline()
+	return nil
 }
 
 // -----------------------------------------------------------------------------
@@ -109,6 +113,7 @@ func (s *FramedTCPSocket) SetWriteDeadline(t time.Time) error {
 
 // Write prepends length and writes data.
 func (s *FramedTCPSocket) Write(p []byte) (n int, err error) {
+	s.refreshDeadline()
 
 	// 1. Prepare Header (4 bytes length)Endian)
 	header := make([]byte, 4)
@@ -129,6 +134,7 @@ func (s *FramedTCPSocket) Write(p []byte) (n int, err error) {
 // Read expects a 4-byte BigEndian length header, then reads that many bytes.
 // SAFE UPDATE: Uses Peek/Discard to ensure header is not lost if buffer is too short.
 func (s *FramedTCPSocket) Read(p []byte) (n int, err error) {
+	s.refreshDeadline()
 	// 1. Peek content check
 	// We need 4 bytes for header.
 	header, err := s.reader.Peek(4)
@@ -159,6 +165,7 @@ func (s *FramedTCPSocket) Read(p []byte) (n int, err error) {
 
 // ReadMessage implements the dynamic read.
 func (s *FramedTCPSocket) ReadMessage() ([]byte, error) {
+	s.refreshDeadline()
 	// 1. Read Length (Must use reader to avoid skipping buffered data)
 	header := make([]byte, 4)
 	if _, err := io.ReadFull(s.reader, header); err != nil {
