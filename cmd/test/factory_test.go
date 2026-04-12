@@ -171,8 +171,13 @@ func TestTCP_Hello(t *testing.T) {
 		}
 		defer conn.Close()
 
-		// Verify Identity Access
-		if hc, ok := conn.(*facade.HandshakeConnection); ok {
+		// Verify Identity Access (Unwrap Heartbeat if present)
+		inner := conn
+		if hb, ok := conn.(*facade.HeartbeatConnection); ok {
+			inner = hb.TransportConnection
+		}
+
+		if hc, ok := inner.(*facade.HandshakeConnection); ok {
 			name, _ := hc.Identity.FromName()
 			fmt.Printf("Handshake Identity Name: %s\n", name)
 		} else {
@@ -304,9 +309,14 @@ func TestUDP_Hello(t *testing.T) {
 		}
 		defer conn.Close()
 
-		// Allow time for testing
-		conn.(*facade.EnvelopedConnection).Proto = protocols.NewHelloProtocol().(*protocols.HelloProtocol)
-		// Note: The facade sets this up, but we need to ensure type assertions work if checking internals.
+		// Allow time for testing (Unwrap Heartbeat if present)
+		var env *facade.EnvelopedConnection
+		if hb, ok := conn.(*facade.HeartbeatConnection); ok {
+			env = hb.TransportConnection.(*facade.EnvelopedConnection)
+		} else {
+			env = conn.(*facade.EnvelopedConnection)
+		}
+		env.Proto = protocols.NewHelloProtocol().(*protocols.HelloProtocol)
 		// Actually, we just read.
 
 		buf := make([]byte, 1024)
