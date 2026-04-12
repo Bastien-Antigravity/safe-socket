@@ -1,6 +1,7 @@
 package facade
 
 import (
+	"sync"
 	"time"
 
 	"github.com/Bastien-Antigravity/safe-socket/src/interfaces"
@@ -10,6 +11,7 @@ import (
 type HeartbeatConnection struct {
 	interfaces.TransportConnection
 	stopHeartbeat chan struct{}
+	closeOnce     sync.Once
 }
 
 func NewHeartbeatConnection(conn interfaces.TransportConnection) *HeartbeatConnection {
@@ -35,9 +37,8 @@ func (h *HeartbeatConnection) start() {
 }
 
 func (h *HeartbeatConnection) Close() error {
-	if h.stopHeartbeat != nil {
+	h.closeOnce.Do(func() {
 		close(h.stopHeartbeat)
-		h.stopHeartbeat = nil
-	}
+	})
 	return h.TransportConnection.Close()
 }
