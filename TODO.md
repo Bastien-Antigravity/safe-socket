@@ -33,3 +33,6 @@ Enable a "Provider" process (e.g., Server) to write data to Shared Memory and **
 
 
 Add a ping - pong mechanism : server problem, close parent connection handler...
+
+
+Maybe create the rust version of this library?
