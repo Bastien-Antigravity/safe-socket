@@ -178,7 +178,7 @@ Or download a pre-built wheel from [GitHub Releases](https://github.com/Bastien-
 
 ```bash
 # Example for a downloaded wheel
-pip install safe_socket-0.1.0-py3-none-macosx_11_0_arm64.whl
+pip install safe_socket-<VERSION>-py3-none-any.whl
 ```
 
 ### Usage Example
