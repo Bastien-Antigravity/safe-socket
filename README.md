@@ -1,3 +1,12 @@
+---
+microservice: safe-socket
+type: repository
+status: active
+language: go
+tags:
+  - domain/networking
+---
+
 # Safe Socket
 
 **Safe Socket** is a high-performance, robust socket library for Go. It provides a reliable abstraction over **TCP**, **UDP**, and **Shared Memory (SHM)** transports with a flexible, profile-based configuration system.
