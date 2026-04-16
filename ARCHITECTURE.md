@@ -1,3 +1,11 @@
+---
+microservice: safe-socket
+type: architecture
+status: active
+tags:
+  - domain/networking
+---
+
 # Architecture
 
 `safe-socket` is designed with a layered architecture to separate concerns between high-level socket operations, protocol logic, and low-level transport mechanisms. This allows for modularity and easy extension (e.g., adding new transports or protocols without breaking the API).
