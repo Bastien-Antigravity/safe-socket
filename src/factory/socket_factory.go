@@ -77,22 +77,22 @@ func CreateWithConfig(profileName, address string, config models.SocketConfig, s
 func createProfile(profileName, address string, st interfaces.SocketType) (interfaces.SocketProfile, error) {
 	switch profileName {
 	case "tcp-hello":
-		// Default timeout 5 seconds for library usage
+		// Default timeout 60 seconds for library usage
 		if st == interfaces.SocketTypeClient {
-			return profiles.NewTcpHelloClientProfile("TcpClient", address, 5000), nil
+			return profiles.NewTcpHelloClientProfile("TcpClient", address, 60000), nil
 		}
-		return profiles.NewTcpHelloServerProfile("TcpServer", address, 5000), nil
+		return profiles.NewTcpHelloServerProfile("TcpServer", address, 60000), nil
 	case "tcp":
 		if st == interfaces.SocketTypeClient {
-			return profiles.NewTcpClientProfile("TcpRaw", address, 5000), nil
+			return profiles.NewTcpClientProfile("TcpRaw", address, 60000), nil
 		}
-		return profiles.NewTcpServerProfile("TcpRaw", address, 5000), nil
+		return profiles.NewTcpServerProfile("TcpRaw", address, 60000), nil
 
 	// UDP Support
 	case "udp":
-		return profiles.NewUdpProfile("UdpRaw", address, 5000), nil
+		return profiles.NewUdpProfile("UdpRaw", address, 60000), nil
 	case "udp-hello":
-		return profiles.NewUdpHelloProfile("UdpHello", address, 5000), nil
+		return profiles.NewUdpHelloProfile("UdpHello", address, 60000), nil
 
 	// SHM Support
 	case "shm":

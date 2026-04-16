@@ -36,3 +36,6 @@ Add a ping - pong mechanism : server problem, close parent connection handler...
 
 
 Maybe create the rust version of this library?
+
+
+propose param for timeout delay and ping-pomg time
