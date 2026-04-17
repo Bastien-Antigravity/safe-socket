@@ -161,7 +161,7 @@ func TestIdleTimeoutRefresh(t *testing.T) {
 			t.Errorf("Server Read failed (unexpected timeout): %v", err)
 		}
 
-		// Wait another 250ms.
+		// Wait another 250ms...
 		// Previous deadline was at 400ms.
 		// Since we just read at 250ms, the new deadline should be 250 + 400 = 650ms.
 		// So at 250+250 = 500ms, it should STILL be alive.
