@@ -15,4 +15,11 @@ type SocketConfig struct {
 	// If set to 0, no deadline is applied by default (server stays open/blocking).
 	// This only applies to the *server* when accepting a new connection.
 	Deadline time.Duration
+
+	// HeartbeatInterval is the time between sending empty heartbeat frames (ping).
+	// If 0, a default (e.g. 10s) may be used depending on the facade.
+	HeartbeatInterval time.Duration
+
+	// HandshakeTimeout is the time allowed for the initial protocol handshake.
+	HandshakeTimeout time.Duration
 }

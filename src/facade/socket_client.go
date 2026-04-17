@@ -94,7 +94,7 @@ func (c *SocketClient) Open() error {
 		}
 	}
 
-	c.transport = NewHeartbeatConnection(conn)
+	c.transport = NewHeartbeatConnection(conn, c.Config.HeartbeatInterval)
 
 	return nil
 }

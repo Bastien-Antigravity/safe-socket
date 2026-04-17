@@ -14,22 +14,31 @@ type HeartbeatConnection struct {
 	closeOnce     sync.Once
 }
 
-func NewHeartbeatConnection(conn interfaces.TransportConnection) *HeartbeatConnection {
+func NewHeartbeatConnection(conn interfaces.TransportConnection, interval time.Duration) *HeartbeatConnection {
+	if interval <= 0 {
+		interval = 10 * time.Second
+	}
 	h := &HeartbeatConnection{
 		TransportConnection: conn,
 		stopHeartbeat:       make(chan struct{}),
 	}
-	go h.start()
+	go h.start(interval)
 	return h
 }
 
-func (h *HeartbeatConnection) start() {
-	ticker := time.NewTicker(10 * time.Second)
+func (h *HeartbeatConnection) start(interval time.Duration) {
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
-			_, _ = h.TransportConnection.Write([]byte{})
+			_, err := h.TransportConnection.Write([]byte{})
+			if err != nil {
+				// FAIL-FAST: Close the connection if heartbeat fails.
+				// This fulfills the "server problem, close parent" requirement.
+				_ = h.Close()
+				return
+			}
 		case <-h.stopHeartbeat:
 			return
 		}
