@@ -14,42 +14,42 @@ tags:
 
 ```mermaid
 flowchart LR
-    Start([<span style='background-color:#0d47a1;color:white;padding:2px 5px;border-radius:3px'>factory.Create</span>]) -- "profile:identity" --> Parse{<span style='background-color:#0d47a1;color:white;padding:2px 5px;border-radius:3px'>Parse Identity</span>}
+    Start([factory.Create]) -- "profile:identity" --> Parse{Parse Identity}
     
-    Parse -- "Extract Name" --> Transport{<span style='background-color:#0d47a1;color:white;padding:2px 5px;border-radius:3px'>Transport?</span>}
+    Parse -- "Extract Name" --> Transport{Transport?}
     
-    Transport -- "TCP" --> DialTCP[<span style='background-color:#0d47a1;color:white;padding:2px 5px;border-radius:3px'>Connect TCP</span>]
-    Transport -- "UDP" --> DialUDP[<span style='background-color:#0d47a1;color:white;padding:2px 5px;border-radius:3px'>Connect UDP</span>]
-    Transport -- "SHM" --> DialSHM[<span style='background-color:#0d47a1;color:white;padding:2px 5px;border-radius:3px'>Connect SHM</span>]
+    Transport -- "TCP" --> DialTCP[Connect TCP]
+    Transport -- "UDP" --> DialUDP[Connect UDP]
+    Transport -- "SHM" --> DialSHM[Connect SHM]
     
-    DialTCP --> Proto{<span style='background-color:#0d47a1;color:white;padding:2px 5px;border-radius:3px'>Protocol?</span>}
+    DialTCP --> Proto{Protocol?}
     DialUDP --> Proto
     DialSHM --> Proto
     
-    Proto -- "Hello" --> Handshake[<span style='background-color:#0d47a1;color:white;padding:2px 5px;border-radius:3px'>Run Handshake</span>]
-    Proto -- "None" --> Heartbeat{<span style='background-color:#0d47a1;color:white;padding:2px 5px;border-radius:3px'>Check Thresholds</span>}
+    Proto -- "Hello" --> Handshake[Run Handshake]
+    Proto -- "None" --> Heartbeat{Check Thresholds}
     
     Handshake --> Heartbeat
     
-    Heartbeat -- "> 300ms" --> EnableHB[<span style='background-color:#0d47a1;color:white;padding:2px 5px;border-radius:3px'>Enable Heartbeat</span>]
-    Heartbeat -- "< 300ms" --> DisableHB[<span style='background-color:#0d47a1;color:white;padding:2px 5px;border-radius:3px'>Disable Heartbeat</span>]
+    Heartbeat -- "> 300ms" --> EnableHB[Enable Heartbeat]
+    Heartbeat -- "< 300ms" --> DisableHB[Disable Heartbeat]
     
-    EnableHB --> Result([<span style='background-color:#0d47a1;color:white;padding:2px 5px;border-radius:3px'>Ready Socket</span>])
+    EnableHB --> Result([Ready Socket])
     DisableHB --> Result
     
-    %% Styles (Reverted to Originals)
-    style Start fill:#f5f5f5,stroke:#333,stroke-width:2px
-    style Result fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
-    style Parse fill:#fff9c4,stroke:#fbc02d
-    style Transport fill:#fff9c4,stroke:#fbc02d
-    style Proto fill:#fff9c4,stroke:#fbc02d
-    style Heartbeat fill:#fff9c4,stroke:#fbc02d
-    style DialTCP fill:#fff,stroke:#333
-    style DialUDP fill:#fff,stroke:#333
-    style DialSHM fill:#fff,stroke:#333
-    style Handshake fill:#fff,stroke:#333
-    style EnableHB fill:#fff,stroke:#333
-    style DisableHB fill:#fff,stroke:#333
+    %% Native Mermaid Styles (GitHub Compatible)
+    style Start fill:#eceff1,stroke:#333,stroke-width:2px
+    style Result fill:#2e7d32,stroke:#1b5e20,stroke-width:2px,color:#fff
+    style Parse fill:#ffd600,stroke:#ffab00,stroke-width:2px,color:#000
+    style Transport fill:#ffd600,stroke:#ffab00,stroke-width:2px,color:#000
+    style Proto fill:#ffd600,stroke:#ffab00,stroke-width:2px,color:#000
+    style Heartbeat fill:#ffd600,stroke:#ffab00,stroke-width:2px,color:#000
+    style DialTCP fill:#1565c0,stroke:#0d47a1,stroke-width:2px,color:#fff
+    style DialUDP fill:#1565c0,stroke:#0d47a1,stroke-width:2px,color:#fff
+    style DialSHM fill:#1565c0,stroke:#0d47a1,stroke-width:2px,color:#fff
+    style Handshake fill:#1565c0,stroke:#0d47a1,stroke-width:2px,color:#fff
+    style EnableHB fill:#1565c0,stroke:#0d47a1,stroke-width:2px,color:#fff
+    style DisableHB fill:#1565c0,stroke:#0d47a1,stroke-width:2px,color:#fff
 ```
 
 ## Layers
