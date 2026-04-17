@@ -40,16 +40,16 @@ flowchart LR
     %% Styles
     style Start fill:#f5f5f5,stroke:#333,stroke-width:2px
     style Result fill:#0d47a1,stroke:#0d47a1,stroke-width:2px,color:#fff
-    style Parse fill:#e1f5fe,stroke:#01579b
-    style Transport fill:#e1f5fe,stroke:#01579b
-    style Proto fill:#e1f5fe,stroke:#01579b
-    style Heartbeat fill:#e1f5fe,stroke:#01579b
-    style DialTCP fill:#e1f5fe,stroke:#01579b
-    style DialUDP fill:#e1f5fe,stroke:#01579b
-    style DialSHM fill:#e1f5fe,stroke:#01579b
-    style Handshake fill:#e1f5fe,stroke:#01579b
-    style EnableHB fill:#e1f5fe,stroke:#01579b
-    style DisableHB fill:#e1f5fe,stroke:#01579b
+    style Parse fill:#90caf9,stroke:#0d47a1,stroke-width:2px
+    style Transport fill:#90caf9,stroke:#0d47a1,stroke-width:2px
+    style Proto fill:#90caf9,stroke:#0d47a1,stroke-width:2px
+    style Heartbeat fill:#90caf9,stroke:#0d47a1,stroke-width:2px
+    style DialTCP fill:#90caf9,stroke:#0d47a1,stroke-width:2px
+    style DialUDP fill:#90caf9,stroke:#0d47a1,stroke-width:2px
+    style DialSHM fill:#90caf9,stroke:#0d47a1,stroke-width:2px
+    style Handshake fill:#90caf9,stroke:#0d47a1,stroke-width:2px
+    style EnableHB fill:#90caf9,stroke:#0d47a1,stroke-width:2px
+    style DisableHB fill:#90caf9,stroke:#0d47a1,stroke-width:2px
 ```
 
 ## Layers
