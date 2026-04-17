@@ -6,7 +6,7 @@ GOGET=$(GOCMD) get
 
 CAPI_SRC=python/capi/main.go
 PYTHON_LIB_DIR=python/safesocket
-LIB_NAME=libsafe_socket
+LIB_NAME=safe_socket
 
 # Detect OS
 ifeq ($(OS),Windows_NT)

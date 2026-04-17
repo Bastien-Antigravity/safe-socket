@@ -155,7 +155,7 @@ func TestTCP_Hello(t *testing.T) {
 	addr := "127.0.0.1:9004" // Port 9004
 
 	// 1. Start Server
-	server, err := factory.Create("tcp-hello", addr, "127.0.0.1", "server", true)
+	server, err := factory.Create("tcp-hello:test-server", addr, "127.0.0.1", "server", true)
 	if err != nil {
 		t.Fatalf("Failed to create TCP Hello server: %v", err)
 	}
@@ -194,7 +194,7 @@ func TestTCP_Hello(t *testing.T) {
 	}()
 
 	// 2. Start Client
-	client, err := factory.Create("tcp-hello", addr, "127.0.0.1", "client", false)
+	client, err := factory.Create("tcp-hello:test-client", addr, "127.0.0.1", "client", false)
 	if err != nil {
 		t.Fatalf("Failed to create TCP Hello client: %v", err)
 	}
@@ -292,7 +292,7 @@ func TestUDP_Hello(t *testing.T) {
 	addr := "127.0.0.1:9002"
 
 	// 1. Start Server
-	server, err := factory.Create("udp-hello", addr, "", "server", true)
+	server, err := factory.Create("udp-hello:test-udp-server", addr, "", "server", true)
 	if err != nil {
 		t.Fatalf("Failed to create UDP Hello server: %v", err)
 	}
@@ -335,7 +335,7 @@ func TestUDP_Hello(t *testing.T) {
 	}()
 
 	// 2. Start Client
-	client, err := factory.Create("udp-hello", addr, "127.0.0.1", "client", false)
+	client, err := factory.Create("udp-hello:test-udp-client", addr, "127.0.0.1", "client", false)
 	if err != nil {
 		t.Fatalf("Failed to create UDP Hello client: %v", err)
 	}

@@ -8,11 +8,11 @@ base_path = os.path.dirname(os.path.abspath(__file__))
 lib_path = None
 
 if sys.platform == "darwin":
-    lib_path = os.path.join(base_path, "libsafe_socket.dylib")
+    lib_path = os.path.join(base_path, "safe_socket.dylib")
 elif sys.platform == "win32":
-    lib_path = os.path.join(base_path, "libsafe_socket.dll")
+    lib_path = os.path.join(base_path, "safe_socket.dll")
 else:
-    lib_path = os.path.join(base_path, "libsafe_socket.so")
+    lib_path = os.path.join(base_path, "safe_socket.so")
 
 if not os.path.exists(lib_path):
     raise FileNotFoundError(f"Shared library not found at: {lib_path}. Please run 'make build' first.")
@@ -20,8 +20,9 @@ if not os.path.exists(lib_path):
 lib = ctypes.CDLL(lib_path)
 
 # Argument and return types
-lib.CreateSocket.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_int]
 lib.CreateSocket.restype = ctypes.c_int32
+lib.CreateSocketExtended.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int]
+lib.CreateSocketExtended.restype = ctypes.c_int32
 
 lib.SocketOpen.argtypes = [ctypes.c_int32]
 lib.SocketOpen.restype = ctypes.c_int32
@@ -56,13 +57,30 @@ def _get_last_error() -> str:
         return err_ptr.decode('utf-8')
     return "Unknown error"
 
+class SocketConfig:
+    """
+    SocketConfig mirrors the Go models.SocketConfig struct.
+    It allows full customization of responsiveness and identity.
+    """
+    def __init__(self, public_ip: str = "", deadline_ms: int = 0, heartbeat_interval_ms: int = 0, handshake_timeout_ms: int = 0):
+        self.public_ip = public_ip
+        self.deadline_ms = deadline_ms
+        self.heartbeat_interval_ms = heartbeat_interval_ms
+        self.handshake_timeout_ms = handshake_timeout_ms
+
 class SafeSocket:
-    def __init__(self, profile: str, address: str, public_ip: str = "", socket_type: str = "client", auto_connect: bool = False):
-        self.handle = lib.CreateSocket(
-            profile.encode('utf-8'),
+    def __init__(self, profile_name: str, address: str, config: Optional[SocketConfig] = None, socket_type: str = "client", auto_connect: bool = False):
+        if config is None:
+            config = SocketConfig()
+        
+        self.handle = lib.CreateSocketExtended(
+            profile_name.encode('utf-8'),
             address.encode('utf-8'),
-            public_ip.encode('utf-8'),
+            config.public_ip.encode('utf-8'),
             socket_type.encode('utf-8'),
+            config.handshake_timeout_ms,
+            config.deadline_ms,
+            config.heartbeat_interval_ms,
             1 if auto_connect else 0
         )
         if self.handle == -1:
@@ -151,5 +169,15 @@ class SafeSocketConnection:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
-def create(profile: str, address: str, public_ip: str = "", socket_type: str = "client", auto_connect: bool = False) -> SafeSocket:
-    return SafeSocket(profile, address, public_ip, socket_type, auto_connect)
+def create(profile_name: str, address: str, public_ip: str = "", socket_type: str = "client", auto_connect: bool = False) -> SafeSocket:
+    """
+    Simplified entry point matching Go safesocket.Create() signature.
+    """
+    config = SocketConfig(public_ip=public_ip)
+    return SafeSocket(profile_name, address, config, socket_type, auto_connect)
+
+def create_with_config(profile_name: str, address: str, config: SocketConfig, socket_type: str = "client", auto_connect: bool = False) -> SafeSocket:
+    """
+    Advanced entry point matching Go safesocket.CreateWithConfig() signature.
+    """
+    return SafeSocket(profile_name, address, config, socket_type, auto_connect)

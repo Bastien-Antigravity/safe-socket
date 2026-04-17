@@ -23,7 +23,7 @@ type Identity = schemas.HelloMsg
 // Parameters:
 //   - profileName: "tcp", "tcp-hello", "udp", "udp-hello", "shm", "shm-hello"
 //   - address: destination address ("IP:Port" or "FilePath" for SHM)
-//   - publicIP: your public IP (Required for "hello" protocols)
+//   - publicIP: your public IP (Optional, resolved from environment/system if empty)
 //   - socketType: "client" or "server"
 //   - autoConnect: if true, immediately calls Open() / Listen()
 func Create(profileName, address, publicIP string, socketType string, autoConnect bool) (Socket, error) {

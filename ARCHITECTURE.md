@@ -48,8 +48,8 @@ flowchart TD
 
 ### 1. Factory Layer (`src/factory`)
 The entry point for the library.
--   **Responsibility**: Validates inputs, creates `SocketProfile`s, initializes `SocketConfig`, and instantiates the appropriate Facade.
--   **Key Functions**: `Create` (simplified), `CreateSocket` (advanced).
+-   **Responsibility**: Validates inputs, creates `SocketProfile`s, initializes `SocketConfig`, and instantiates the appropriate Facade. Inject defaults for ultra-responsiveness (Fail-Fast model).
+-   **Key Functions**: `Create` (simplified), `CreateWithConfig` (advanced).
 
 ### 2. Facade Layer (`src/facade`)
 Implements the high-level `interfaces.Socket` API (`Open`, `Close`, `Send`, `Receive`, `Accept`).
@@ -76,10 +76,12 @@ Handles the low-level I/O.
 ## Key Concepts
 
 ### Deadline Management
+
 Deadlines are handled at two levels:
-1.  **Idle Timeout**: The library now uses an "activity-refresh" model. Setting a `Deadline` on `SocketConfig` (or calling `SetIdleTimeout`) establishes a window of inactivity. Every successful `Read`, `Write`, or `ReadMessage` operation automatically pushes the absolute deadline forward by this duration.
-2.  **Explicit Control**: `SetDeadline` methods on the Socket interface allow per-operation absolute control if needed.
-3.  **Infinite Connections**: Setting a `Deadline` of `0` disables all timeouts, allowing for permanent persistent connections.
+1.  **Aggressive Defaults**: To ensure local clusters detect failures instantly, the library defaults to **500ms** (network) or **200ms** (local) timeouts for both handshakes and data operations.
+2.  **Activity-Refresh Model**: The library uses an "activity-refresh" model. Setting a `Deadline` on `SocketConfig` establishes a window of inactivity. Every successful `Read`, `Write`, or `ReadMessage` operation automatically pushes the absolute deadline forward by this duration.
+3.  **Explicit Control**: `SetDeadline` methods on the Socket interface allow per-operation absolute control if needed.
+4.  **Safe Fallbacks**: Setting a `Deadline` of `0` now triggers the responsive defaults (500ms/200ms) to prevent "hanging" connections in microservice mesh scenarios. Use a high explicit duration if a quasi-infinite connection is needed.
 
 ### Profile System
 Configuration is driven by `SocketProfile`, which dictates:

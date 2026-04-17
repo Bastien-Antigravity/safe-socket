@@ -42,11 +42,19 @@ jobs:
           cd python
           python -m build
 
-      - name: Upload wheels
+      - name: Copy Shared Library to dist
+        # Copy the raw library to the dist folder so it can be uploaded and released
+        run: |
+          cp python/safesocket/safe_socket.* python/dist/
+        shell: bash
+
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: wheels-${{ matrix.os }}
-          path: python/dist/*.whl
+          name: artifacts-${{ matrix.os }}
+          path: |
+            python/dist/*.whl
+            python/dist/safe_socket.*
 
   release:
     name: Create Release
@@ -58,7 +66,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download all wheels
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: dist
@@ -67,7 +75,9 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*.whl
+          files: |
+            dist/*.whl
+            dist/safe_socket.*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

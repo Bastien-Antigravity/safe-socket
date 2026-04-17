@@ -1,7 +1,6 @@
 package protocols
 
 import (
-	"errors"
 	"os"
 
 	"capnproto.org/go/capnp/v3"
@@ -25,17 +24,11 @@ func NewHelloProtocol() interfaces.Protocol {
 func (p *HelloProtocol) Initiate(conn interfaces.TransportConnection, profile interfaces.SocketProfile, config models.SocketConfig) error {
 	hostname, _ := os.Hostname()
 
-	// PublicIP is required for the Hello Protocol
+	// PublicIP is optional for the Hello Protocol
 	publicIP := config.PublicIP
-	if publicIP == "" {
-		return errors.New("PublicIP is required in SocketConfig for HelloProtocol")
-	}
 
-	// Protocol Identity (Name) is required
+	// Protocol Identity (Name) is optional at protocol level, though factory provides defaults
 	appName := profile.GetName()
-	if appName == "" || appName == "TcpClient" {
-		return errors.New("a valid AppName must be provided in the SocketProfile for HelloProtocol (cannot be empty or 'TcpClient')")
-	}
 
 	// Cap'n Proto Message Construction
 	msg, seg, err := capnp.NewMessage(capnp.SingleSegment(nil))
@@ -52,7 +45,7 @@ func (p *HelloProtocol) Initiate(conn interfaces.TransportConnection, profile in
 	localAddr := conn.LocalAddr().String()
 	remoteAddr := conn.RemoteAddr().String()
 
-	_ = helloMsg.SetFromName(profile.GetName())
+	_ = helloMsg.SetFromName(appName)
 	_ = helloMsg.SetFromHost(hostname)
 	_ = helloMsg.SetFromAddress(localAddr) // Actual bound address
 	_ = helloMsg.SetToAddress(remoteAddr)  // Target address

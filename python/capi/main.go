@@ -76,6 +76,30 @@ func CreateSocket(profileName, address, publicIP, socketType *C.char, autoConnec
 	return Register(sock)
 }
 
+//export CreateSocketExtended
+func CreateSocketExtended(profileName, address, publicIP, socketType *C.char, handshakeTimeoutMs, deadlineMs, heartbeatIntervalMs C.int, autoConnect C.int) int32 {
+	pName := C.GoString(profileName)
+	addr := C.GoString(address)
+	pIP := C.GoString(publicIP)
+	sType := C.GoString(socketType)
+	auto := autoConnect != 0
+
+	config := safesocket.SocketConfig{
+		PublicIP:          pIP,
+		HandshakeTimeout:  time.Duration(handshakeTimeoutMs) * time.Millisecond,
+		Deadline:          time.Duration(deadlineMs) * time.Millisecond,
+		HeartbeatInterval: time.Duration(heartbeatIntervalMs) * time.Millisecond,
+	}
+
+	sock, err := safesocket.CreateWithConfig(pName, addr, config, sType, auto)
+	if err != nil {
+		setError(err)
+		return -1
+	}
+
+	return Register(sock)
+}
+
 //export SocketOpen
 func SocketOpen(handle int32) int32 {
 	val, ok := Get(handle)

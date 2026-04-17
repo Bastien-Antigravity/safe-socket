@@ -29,6 +29,7 @@ go get github.com/Bastien-Antigravity/safe-socket
     -   **Hello Protocol**: Identity exchange handshake.
     -   **Stateless Envelope (UDP)**: Zero-handshake authentication where every packet carries the sender's identity and payload.
 -   **Unified Facade**: Interact with any transport using `Open()`, `Close()`, `Send()`, `Receive()`, and `Accept()`.
+-   **Aggressive Responsiveness**: Optimized for high-frequency microservice environments with extremely tight default timeouts (500ms network / 100ms SHM) and an active activity-refresh deadline model.
 
 ## Usage
 
@@ -46,9 +47,9 @@ import (
 
 func main() {
     // Example: Connect to a server using TCP with Hello Handshake
-    // publicIP is required for the handshake identity.
+    // publicIP: Optional (automatically resolved if empty)
     // socketType: "client" or "server"
-    socket, err := safesocket.Create("tcp-hello", "127.0.0.1:9000", "192.168.1.50", "client", true)
+    socket, err := safesocket.Create("tcp-hello", "127.0.0.1:9000", "", "client", true)
     if err != nil {
         log.Fatal(err)
     }
@@ -109,7 +110,20 @@ if err != nil {
 ### Compound Profiles (Identity Injection)
 
 You can specify a custom identity name for any protocol-aware profile by using the syntax `[profile]:[name]`.
-For example, `tcp-hello:my-service` will use the `tcp-hello` transport but identify itself as `my-service` during the handshake. If no name is provided, default generic names are used.
+For example, `tcp-hello:my-service` will use the `tcp-hello` transport but identify itself as `my-service` during the handshake. If no name is provided, the library injects generic identifies (e.g., `TcpClient-Generic`).
+
+### High-Responsiveness Defaults
+
+The library is configured to "fail-fast" to ensure system health and rapid reconnection. If no configuration is provided, the following defaults are applied:
+
+| Condition | Handshake Timeout | Data Deadline (Read/Write) | Heartbeat Interval |
+| :--- | :--- | :--- | :--- |
+| **Network (TCP/UDP)** | 500ms | 500ms | 2s |
+| **Local (127.0.0.1)** | 200ms | 200ms | 2s |
+| **Shared Memory (SHM)** | 100ms | 100ms | 2s |
+
+> [!TIP]
+> Use `safesocket.CreateWithConfig` to override these defaults if your environment requires more latency headroom.
 
 ### Protocol Details
 
@@ -192,20 +206,29 @@ pip install safe_socket-<VERSION>-py3-none-any.whl
 ```python
 from safesocket import safesocket
 
-# Create and open a client
-with safesocket.create(profile="tcp-hello", address="127.0.0.1:9000", public_ip="1.2.3.4") as client:
+# 1. Simple creation (uses responsive defaults)
+# public_ip is optional.
+with safesocket.create(profile_name="tcp-hello", address="127.0.0.1:9000") as client:
     client.open()
     client.send(b"Hello from Python!")
     response = client.receive()
     print(f"Received: {response.decode()}")
 
-# Server side
-server = safesocket.create(profile="tcp", address="0.0.0.0:9000", socket_type="server")
-server.listen()
-conn = server.accept()
-with conn:
-    data = conn.receive()
-    conn.send(b"Echo: " + data)
-server.close()
+# 2. Advanced creation (custom configuration)
+config = safesocket.SocketConfig(deadline_ms=500, heartbeat_interval_ms=1000)
+with safesocket.create_with_config("tcp-hello", "0.0.0.0:9000", config, socket_type="server") as server:
+    server.listen()
+    conn = server.accept()
+    with conn:
+        data = conn.receive()
+        conn.send(b"Echo: " + data)
+```
+
+## Compilation Note
+
+Since the Python wrapper uses a Go shared library, you must rebuild it using the C-bridge if the source code or API changes:
+
+```bash
+go build -o python/safesocket/safe_socket.dll -buildmode=c-shared ./python/capi
 ```
 

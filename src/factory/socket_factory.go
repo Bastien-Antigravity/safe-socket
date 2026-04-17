@@ -8,34 +8,26 @@ import (
 	"github.com/Bastien-Antigravity/safe-socket/src/models"
 	"github.com/Bastien-Antigravity/safe-socket/src/profiles"
 	"strings"
+	"time"
+)
+
+const (
+	// DefaultHandshakeTimeout is used for network transports (TCP/UDP)
+	DefaultHandshakeTimeout = 500 // 0.5s
+	// DefaultLocalHandshakeTimeout is used for loopback (127.0.0.1/localhost)
+	DefaultLocalHandshakeTimeout = 200 // 0.2s
+	// DefaultShmHandshakeTimeout is used for Shared Memory (SHM)
+	DefaultShmHandshakeTimeout = 100 // 100ms
 )
 
 // -----------------------------------------------------------------------------
 
-// Create is the simplified library entry point.
-// profileName: "tcp-hello" (currently supported)
-// address: destination address to connect to (e.g. "127.0.0.1:8081")
-// publicIP: this node's public IP (for protocol handshake)
-// Returns an open Socket interface or an error.
 // Create is the simplified library entry point for creating any type of Socket.
 //
 // Parameters:
 //   - profileName: e.g. "tcp-hello" (currently supported)
 //   - address: destination address to connect to (Client) or bind to (Server) (e.g. "127.0.0.1:8081")
-//   - publicIP: this node's public IP (used for protocol handshake data)
-//   - socketType: "client" or "server" (case-insensitive)
-//   - autoConnect: if true, automatically calls Open() (Client) or Listen() (Server)
-//
-// Returns:
-//
-//	An interfaces.Socket which can be used to Send/Receive (Client) or Accept (Server).
-//
-// Create is the simplified library entry point for creating any type of Socket.
-//
-// Parameters:
-//   - profileName: e.g. "tcp-hello" (currently supported)
-//   - address: destination address to connect to (Client) or bind to (Server) (e.g. "127.0.0.1:8081")
-//   - publicIP: this node's public IP (used for protocol handshake data)
+//   - publicIP: this node's public IP (used for protocol handshake data, now optional)
 //   - socketType: "client" or "server" (case-insensitive)
 //   - autoConnect: if true, automatically calls Open() (Client) or Listen() (Server)
 //
@@ -63,7 +55,37 @@ func CreateWithConfig(profileName, address string, config models.SocketConfig, s
 		return nil, err
 	}
 
-	p, err := createProfile(profileName, address, st)
+	// 1. Determine Identity and Profile Key
+	profileKey := profileName
+	if parts := strings.Split(profileName, ":"); len(parts) > 1 {
+		profileKey = parts[0]
+	}
+
+	// 2. Determine Timeout
+	timeout := int(config.HandshakeTimeout.Milliseconds())
+	if timeout <= 0 {
+		isLocal := strings.Contains(address, "localhost") ||
+			strings.Contains(address, "127.0.0.1") ||
+			strings.Contains(address, "::1")
+
+		if strings.HasPrefix(profileKey, "shm") {
+			timeout = DefaultShmHandshakeTimeout
+		} else if isLocal {
+			timeout = DefaultLocalHandshakeTimeout
+		} else {
+			timeout = DefaultHandshakeTimeout
+		}
+	}
+
+	// 3. Apply Defaults to Config for runtime responsiveness
+	if config.Deadline == 0 {
+		config.Deadline = time.Duration(timeout) * time.Millisecond
+	}
+	if config.HeartbeatInterval == 0 {
+		config.HeartbeatInterval = 2 * time.Second // 2s default for high responsiveness
+	}
+
+	p, err := createProfile(profileName, address, st, timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +97,7 @@ func CreateWithConfig(profileName, address string, config models.SocketConfig, s
 	return CreateSocket(p, config, socketType)
 }
 
-func createProfile(profileName, address string, st interfaces.SocketType) (interfaces.SocketProfile, error) {
+func createProfile(profileName, address string, st interfaces.SocketType, timeout int) (interfaces.SocketProfile, error) {
 	// 1. Support Compound Names (syntax: "profile:identity")
 	// If no colon is present, identity defaults to an internal fallback in the switch.
 	var identity string
@@ -87,46 +109,46 @@ func createProfile(profileName, address string, st interfaces.SocketType) (inter
 
 	switch profileKey {
 	case "tcp-hello":
-		// Default timeout 60 seconds for library usage
+		// Default identities must be non-empty strings for identity-aware transports
 		if identity == "" {
 			if st == interfaces.SocketTypeClient {
-				identity = "TcpClient"
+				identity = "TcpClient-Generic"
 			} else {
-				identity = "TcpServer"
+				identity = "TcpServer-Generic"
 			}
 		}
 
 		if st == interfaces.SocketTypeClient {
-			return profiles.NewTcpHelloClientProfile(identity, address, 60000), nil
+			return profiles.NewTcpHelloClientProfile(identity, address, timeout), nil
 		}
-		return profiles.NewTcpHelloServerProfile(identity, address, 60000), nil
+		return profiles.NewTcpHelloServerProfile(identity, address, timeout), nil
 
 	case "tcp":
 		if identity == "" {
-			identity = "TcpRaw"
+			identity = "TcpRaw-Generic"
 		}
 		if st == interfaces.SocketTypeClient {
-			return profiles.NewTcpClientProfile(identity, address, 60000), nil
+			return profiles.NewTcpClientProfile(identity, address, timeout), nil
 		}
-		return profiles.NewTcpServerProfile(identity, address, 60000), nil
+		return profiles.NewTcpServerProfile(identity, address, timeout), nil
 
 	// UDP Support
 	case "udp":
 		if identity == "" {
-			identity = "UdpRaw"
+			identity = "UdpRaw-Generic"
 		}
-		return profiles.NewUdpProfile(identity, address, 60000), nil
+		return profiles.NewUdpProfile(identity, address, timeout), nil
 	case "udp-hello":
 		if identity == "" {
-			identity = "UdpHello"
+			identity = "UdpHello-Generic"
 		}
-		return profiles.NewUdpHelloProfile(identity, address, 60000), nil
+		return profiles.NewUdpHelloProfile(identity, address, timeout), nil
 
 	// SHM Support
 	case "shm":
-		return profiles.NewShmProfile(address, 5000), nil // address is path
+		return profiles.NewShmProfile(address, timeout), nil // address is path
 	case "shm-hello":
-		return profiles.NewShmHelloProfile(address, 5000), nil
+		return profiles.NewShmHelloProfile(address, timeout), nil
 	default:
 		return nil, fmt.Errorf("unknown profile: %s", profileKey)
 	}

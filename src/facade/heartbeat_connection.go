@@ -16,7 +16,7 @@ type HeartbeatConnection struct {
 
 func NewHeartbeatConnection(conn interfaces.TransportConnection, interval time.Duration) *HeartbeatConnection {
 	if interval <= 0 {
-		interval = 10 * time.Second
+		interval = 2 * time.Second
 	}
 	h := &HeartbeatConnection{
 		TransportConnection: conn,
