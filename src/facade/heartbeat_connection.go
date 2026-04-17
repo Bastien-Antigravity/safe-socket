@@ -19,7 +19,6 @@ func NewHeartbeatConnection(conn interfaces.TransportConnection, interval time.D
 		TransportConnection: conn,
 		stopHeartbeat:       make(chan struct{}),
 	}
-	// A duration of 0 or less disables the heartbeat pulse.
 	if interval > 0 {
 		go h.start(interval)
 	}

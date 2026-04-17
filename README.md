@@ -22,7 +22,7 @@ go get github.com/Bastien-Antigravity/safe-socket
 -   **Modular Transports**:
 -   **Modular Transports**:
     -   **Framed TCP**: Reliable, persistent connections with message framing. Optimizes `Read()` via buffering to support safe buffer pooling (prevents header loss on short reads). 
-    -   **Heartbeat Support**: Automatically handles 0-length frames as heartbeats. `Read()` and `ReadMessage()` return `n=0` / `empty buffer` when a heartbeat arrives, allowing application loops to refresh deadlines.
+    -   **Heartbeat Support**: Automatically handles 0-length frames as heartbeats. Includes an **Adaptive safety-ratio (2.5x)** that ensures heartbeats always fire before an idle timeout occurs.
     -   **UDP**: High-speed, connectionless communication with optional reliability layers.
     -   **Shared Memory (SHM)**: Ultra-low latency IPC for local processes using memory-mapped files (Ring Buffer).
 -   **Intelligent Protocols**:
@@ -74,6 +74,9 @@ func main() {
     // Alternative: Use Read() for fixed buffers (io.Reader compliant)
     // buf := make([]byte, 1024)
     // n, _ := socket.Read(buf)
+
+    // NEW: Update Idle Timeout at runtime
+    socket.SetIdleTimeout(5 * time.Second)
 }
 ```
 
@@ -116,11 +119,20 @@ For example, `tcp-hello:my-service` will use the `tcp-hello` transport but ident
 
 The library is configured to "fail-fast" to ensure system health and rapid reconnection. If no configuration is provided, the following defaults are applied:
 
-| Condition | Handshake Timeout | Data Deadline (Read/Write) | Heartbeat Interval |
+| Condition | Handshake Timeout | Data Deadline (Idle Timeout) | Heartbeat Interval (Auto) |
 | :--- | :--- | :--- | :--- |
-| **Network (TCP/UDP)** | 500ms | 500ms | 2s |
-| **Local (127.0.0.1)** | 200ms | 200ms | 2s |
-| **Shared Memory (SHM)** | 100ms | 100ms | 2s |
+| **Network (TCP/UDP)** | 500ms | 500ms | **200ms** (or Deadline/2.5) |
+| **Local (127.0.0.1)** | 200ms | 200ms | **80ms** (or Deadline/2.5) |
+| **Shared Memory (SHM)** | 100ms | 100ms | **40ms** (or Deadline/2.5) |
+
+### Heartbeat Optimization & Thresholds
+
+To maximize performance, heartbeats are **automatically disabled** if the `IdleTimeout` (Deadline) is set below these thresholds:
+-   **Network**: < 300ms
+-   **Local**: < 150ms
+-   **SHM**: < 50ms
+
+When heartbeats are disabled due to these thresholds, a warning is printed to `stdout` to notify that the connection will close if genuine data is not transmitted within the window.
 
 > [!TIP]
 > Use `safesocket.CreateWithConfig` to override these defaults if your environment requires more latency headroom.

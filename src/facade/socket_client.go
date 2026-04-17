@@ -3,6 +3,7 @@ package facade
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Bastien-Antigravity/safe-socket/src/interfaces"
@@ -95,36 +96,34 @@ func (c *SocketClient) Open() error {
 		}
 	}
 
-	}
-	// 3. Heartbeat Optimization Logic (Thresholds & Ratio)
-	hbInterval := c.Config.HeartbeatInterval
-	if hbInterval == 0 {
+	// 3. Heartbeat Optimization & Safety Ratio
+	if c.Config.HeartbeatInterval == 0 {
 		// Calculate optimal heartbeat (IdleTimeout / 2.5)
-		// and check for disabling threshold based on transport
-		threshold := 300 * time.Millisecond // Default (Network)
-		transportName := "Network"
+		heartbeat := time.Duration(float64(idleTimeout) / 2.5)
 
-		if c.Profile.GetTransport() == interfaces.TransportShm {
+		// Threshold Check (Network: 300ms, Local: 150ms, SHM: 50ms)
+		threshold := 300 * time.Millisecond // Default (Networking)
+		addr := c.Profile.GetAddress()
+		isLocal := strings.Contains(addr, "127.0.0.1") || strings.Contains(addr, "localhost")
+		isShm := c.Profile.GetTransport() == interfaces.TransportShm
+
+		transportName := "networking"
+		if isShm {
 			threshold = 50 * time.Millisecond
-			transportName = "SHM"
-		} else if isLocalAddress(c.Profile.GetAddress()) {
+			transportName = "shared memory"
+		} else if isLocal {
 			threshold = 150 * time.Millisecond
-			transportName = "Local"
+			transportName = "local"
 		}
 
 		if idleTimeout < threshold {
-			// Disable heartbeat and warn
-			hbInterval = 0
-			fmt.Printf("Heartbeat disabled: IdleTimeout (%dms) is below the threshold for %s transport. Connection will close if inactive.\n",
-				idleTimeout.Milliseconds(), transportName)
+			fmt.Printf("Heartbeat disabled: IdleTimeout (%dms) is below the threshold for %s transport. Connection will close if inactive.\n", idleTimeout.Milliseconds(), transportName)
 		} else {
-			hbInterval = idleTimeout / 2 / 2 * 5 / 10 // Close to 2.5x
-			// simpler:
-			hbInterval = time.Duration(float64(idleTimeout) / 2.5)
+			c.Config.HeartbeatInterval = heartbeat
 		}
 	}
 
-	c.transport = NewHeartbeatConnection(conn, hbInterval)
+	c.transport = NewHeartbeatConnection(conn, c.Config.HeartbeatInterval)
 
 	return nil
 }

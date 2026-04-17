@@ -57,8 +57,8 @@ func TestServerConfigDeadline(t *testing.T) {
 		errChan <- nil
 	}()
 
-	// 2. Client Connects
-	client, err := factory.Create("tcp", addr, "", "client", true)
+	// 2. Client Connects with Heartbeat Disabled (-1) to allow timeout testing
+	client, err := factory.CreateWithConfig("tcp", addr, models.SocketConfig{HeartbeatInterval: -1}, "client", true)
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
 	}

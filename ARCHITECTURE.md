@@ -80,8 +80,12 @@ Handles the low-level I/O.
 Deadlines are handled at two levels:
 1.  **Aggressive Defaults**: To ensure local clusters detect failures instantly, the library defaults to **500ms** (network) or **200ms** (local) timeouts for both handshakes and data operations.
 2.  **Activity-Refresh Model**: The library uses an "activity-refresh" model. Setting a `Deadline` on `SocketConfig` establishes a window of inactivity. Every successful `Read`, `Write`, or `ReadMessage` operation automatically pushes the absolute deadline forward by this duration.
-3.  **Explicit Control**: `SetDeadline` methods on the Socket interface allow per-operation absolute control if needed.
-4.  **Safe Fallbacks**: Setting a `Deadline` of `0` now triggers the responsive defaults (500ms/200ms) to prevent "hanging" connections in microservice mesh scenarios. Use a high explicit duration if a quasi-infinite connection is needed.
+3.  **Heartbeat Safety Ratio (2.5x)**: To prevent connections from timing out during idle periods, a heartbeat is automatically scheduled at a `Deadline / 2.5` interval. This ensures at least 2 heartbeat attempts are made before any timeout can occur.
+4.  **Adaptive Thresholds**: Heartbeats are intelligently disabled for ultra-responsive scenarios to minimize overhead:
+    -   **Networking (TCP/UDP)**: Disabled if Deadline < 300ms.
+    -   **Local (127.0.0.1)**: Disabled if Deadline < 150ms.
+    -   **SHM**: Disabled if Deadline < 50ms.
+5.  **Explicit Control & Dynamic Updates**: `SetIdleTimeout(duration)` allows runtime adjustments. Setting a `Deadline` of `0` triggers the responsive defaults (500ms/200ms).
 
 ### Profile System
 Configuration is driven by `SocketProfile`, which dictates:
