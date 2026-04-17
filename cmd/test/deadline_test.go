@@ -83,8 +83,9 @@ func TestServerConfigDeadline(t *testing.T) {
 func TestClientDynamicDeadline(t *testing.T) {
 	addr := "127.0.0.1:9051"
 
-	// 1. Setup Server (Normal, no deadline)
-	server, _ := factory.Create("tcp", addr, "", "server", true)
+	// 1. Setup Server (Explicit 1s deadline to allow for the 500ms test sleep)
+	config := models.SocketConfig{Deadline: 1 * time.Second}
+	server, _ := factory.CreateWithConfig("tcp", addr, config, "server", true)
 	defer server.Close()
 
 	go func() {
@@ -111,7 +112,11 @@ func TestClientDynamicDeadline(t *testing.T) {
 	}
 	t.Logf("Client correctly timed out: %v", err)
 
-	// 5. Reset Deadline (0)
+	// 5. Reset Deadline (0) and Disable Idle Timeout
+	// Our 'activity-refresh' model will keep re-applying the 200ms default otherwise.
+	if err := client.SetIdleTimeout(0); err != nil {
+		t.Fatalf("Failed to disable idle timeout: %v", err)
+	}
 	if err := client.SetReadDeadline(time.Time{}); err != nil {
 		t.Fatalf("Failed to reset deadline: %v", err)
 	}

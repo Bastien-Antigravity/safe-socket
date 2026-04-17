@@ -15,14 +15,14 @@ type HeartbeatConnection struct {
 }
 
 func NewHeartbeatConnection(conn interfaces.TransportConnection, interval time.Duration) *HeartbeatConnection {
-	if interval <= 0 {
-		interval = 2 * time.Second
-	}
 	h := &HeartbeatConnection{
 		TransportConnection: conn,
 		stopHeartbeat:       make(chan struct{}),
 	}
-	go h.start(interval)
+	// A duration of 0 or less disables the heartbeat pulse.
+	if interval > 0 {
+		go h.start(interval)
+	}
 	return h
 }
 
@@ -50,4 +50,8 @@ func (h *HeartbeatConnection) Close() error {
 		close(h.stopHeartbeat)
 	})
 	return h.TransportConnection.Close()
+}
+
+func (h *HeartbeatConnection) SetIdleTimeout(d time.Duration) error {
+	return h.TransportConnection.SetIdleTimeout(d)
 }

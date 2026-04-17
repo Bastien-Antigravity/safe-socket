@@ -39,6 +39,11 @@ type Socket interface {
 	SetReadDeadline(t time.Time) error
 	SetWriteDeadline(t time.Time) error
 
+	// IdleTimeout controls the 'activity-refresh' duration.
+	// Every successful Read/Write will refresh the absolute deadline to Now() + d.
+	// Set to 0 to disable automated refreshing.
+	SetIdleTimeout(d time.Duration) error
+
 	// Server Methods
 	Listen() error
 	Accept() (TransportConnection, error)

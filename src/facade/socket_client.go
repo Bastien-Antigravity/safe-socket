@@ -2,6 +2,7 @@ package facade
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/Bastien-Antigravity/safe-socket/src/interfaces"
@@ -94,7 +95,36 @@ func (c *SocketClient) Open() error {
 		}
 	}
 
-	c.transport = NewHeartbeatConnection(conn, c.Config.HeartbeatInterval)
+	}
+	// 3. Heartbeat Optimization Logic (Thresholds & Ratio)
+	hbInterval := c.Config.HeartbeatInterval
+	if hbInterval == 0 {
+		// Calculate optimal heartbeat (IdleTimeout / 2.5)
+		// and check for disabling threshold based on transport
+		threshold := 300 * time.Millisecond // Default (Network)
+		transportName := "Network"
+
+		if c.Profile.GetTransport() == interfaces.TransportShm {
+			threshold = 50 * time.Millisecond
+			transportName = "SHM"
+		} else if isLocalAddress(c.Profile.GetAddress()) {
+			threshold = 150 * time.Millisecond
+			transportName = "Local"
+		}
+
+		if idleTimeout < threshold {
+			// Disable heartbeat and warn
+			hbInterval = 0
+			fmt.Printf("Heartbeat disabled: IdleTimeout (%dms) is below the threshold for %s transport. Connection will close if inactive.\n",
+				idleTimeout.Milliseconds(), transportName)
+		} else {
+			hbInterval = idleTimeout / 2 / 2 * 5 / 10 // Close to 2.5x
+			// simpler:
+			hbInterval = time.Duration(float64(idleTimeout) / 2.5)
+		}
+	}
+
+	c.transport = NewHeartbeatConnection(conn, hbInterval)
 
 	return nil
 }
@@ -179,6 +209,17 @@ func (c *SocketClient) SetWriteDeadline(t time.Time) error {
 		return errors.New("socket not open")
 	}
 	return c.transport.SetWriteDeadline(t)
+}
+
+// -----------------------------------------------------------------------------
+
+// SetIdleTimeout updates the internal idle timeout and refreshes the current deadline.
+func (c *SocketClient) SetIdleTimeout(d time.Duration) error {
+	c.Config.Deadline = d
+	if c.transport != nil {
+		return c.transport.SetIdleTimeout(d)
+	}
+	return nil
 }
 
 // -----------------------------------------------------------------------------
