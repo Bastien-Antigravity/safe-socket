@@ -21,7 +21,8 @@ go get github.com/Bastien-Antigravity/safe-socket
 
 -   **Modular Transports**:
 -   **Modular Transports**:
-    -   **Framed TCP**: Reliable, persistent connections with message framing. Optimizes `Read()` via buffering to support safe buffer pooling (prevents header loss on short reads).
+    -   **Framed TCP**: Reliable, persistent connections with message framing. Optimizes `Read()` via buffering to support safe buffer pooling (prevents header loss on short reads). 
+    -   **Heartbeat Support**: Automatically handles 0-length frames as heartbeats. `Read()` and `ReadMessage()` return `n=0` / `empty buffer` when a heartbeat arrives, allowing application loops to refresh deadlines.
     -   **UDP**: High-speed, connectionless communication with optional reliability layers.
     -   **Shared Memory (SHM)**: Ultra-low latency IPC for local processes using memory-mapped files (Ring Buffer).
 -   **Intelligent Protocols**:
@@ -104,6 +105,11 @@ if err != nil {
 | `"udp-hello"` | UDP | Hello | `IP:Port` | **Stateless Envelope**: Wraps every packet with Identity + Payload. |
 | `"shm"` | SHM | None | File Path | Raw Memory Mapped File. |
 | `"shm-hello"` | SHM | Hello | File Path | SHM + Identity Handshake. |
+
+### Compound Profiles (Identity Injection)
+
+You can specify a custom identity name for any protocol-aware profile by using the syntax `[profile]:[name]`.
+For example, `tcp-hello:my-service` will use the `tcp-hello` transport but identify itself as `my-service` during the handshake. If no name is provided, default generic names are used.
 
 ### Protocol Details
 

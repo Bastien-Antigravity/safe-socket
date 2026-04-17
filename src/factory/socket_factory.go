@@ -7,6 +7,7 @@ import (
 	"github.com/Bastien-Antigravity/safe-socket/src/interfaces"
 	"github.com/Bastien-Antigravity/safe-socket/src/models"
 	"github.com/Bastien-Antigravity/safe-socket/src/profiles"
+	"strings"
 )
 
 // -----------------------------------------------------------------------------
@@ -75,24 +76,51 @@ func CreateWithConfig(profileName, address string, config models.SocketConfig, s
 }
 
 func createProfile(profileName, address string, st interfaces.SocketType) (interfaces.SocketProfile, error) {
-	switch profileName {
+	// 1. Support Compound Names (syntax: "profile:identity")
+	// If no colon is present, identity defaults to an internal fallback in the switch.
+	var identity string
+	profileKey := profileName
+	if parts := strings.Split(profileName, ":"); len(parts) > 1 {
+		profileKey = parts[0]
+		identity = parts[1]
+	}
+
+	switch profileKey {
 	case "tcp-hello":
 		// Default timeout 60 seconds for library usage
-		if st == interfaces.SocketTypeClient {
-			return profiles.NewTcpHelloClientProfile("TcpClient", address, 60000), nil
+		if identity == "" {
+			if st == interfaces.SocketTypeClient {
+				identity = "TcpClient"
+			} else {
+				identity = "TcpServer"
+			}
 		}
-		return profiles.NewTcpHelloServerProfile("TcpServer", address, 60000), nil
+
+		if st == interfaces.SocketTypeClient {
+			return profiles.NewTcpHelloClientProfile(identity, address, 60000), nil
+		}
+		return profiles.NewTcpHelloServerProfile(identity, address, 60000), nil
+
 	case "tcp":
-		if st == interfaces.SocketTypeClient {
-			return profiles.NewTcpClientProfile("TcpRaw", address, 60000), nil
+		if identity == "" {
+			identity = "TcpRaw"
 		}
-		return profiles.NewTcpServerProfile("TcpRaw", address, 60000), nil
+		if st == interfaces.SocketTypeClient {
+			return profiles.NewTcpClientProfile(identity, address, 60000), nil
+		}
+		return profiles.NewTcpServerProfile(identity, address, 60000), nil
 
 	// UDP Support
 	case "udp":
-		return profiles.NewUdpProfile("UdpRaw", address, 60000), nil
+		if identity == "" {
+			identity = "UdpRaw"
+		}
+		return profiles.NewUdpProfile(identity, address, 60000), nil
 	case "udp-hello":
-		return profiles.NewUdpHelloProfile("UdpHello", address, 60000), nil
+		if identity == "" {
+			identity = "UdpHello"
+		}
+		return profiles.NewUdpHelloProfile(identity, address, 60000), nil
 
 	// SHM Support
 	case "shm":
@@ -100,7 +128,7 @@ func createProfile(profileName, address string, st interfaces.SocketType) (inter
 	case "shm-hello":
 		return profiles.NewShmHelloProfile(address, 5000), nil
 	default:
-		return nil, fmt.Errorf("unknown profile: %s", profileName)
+		return nil, fmt.Errorf("unknown profile: %s", profileKey)
 	}
 }
 
