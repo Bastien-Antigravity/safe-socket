@@ -149,29 +149,20 @@ func runServer() {
 
 ### Accessing Peer Identity
 
-You can access the metadata exchanged during the Hello Handshake (e.g., Peer Name, Public IP) by type-asserting the connection.
-
-**For TCP / SHM:**
+You can access the metadata exchanged during the Hello Handshake (e.g., Peer Name, Hostname, IP) by using the unified `safesocket.GetIdentity` helper. This works for both session-based (TCP/SHM) and stateless (UDP) connections without needing to import internal packages.
 
 ```go
 conn, _ := server.Accept()
-// Check if it's a HandshakeConnection
-if hc, ok := conn.(*facade.HandshakeConnection); ok {
-    fmt.Printf("Connected Peer: %s (IP: %s)\n", hc.Identity.FromName(), hc.Identity.FromPublicIP())
+
+// GetIdentity automatically handles all wrapper types
+identity := safesocket.GetIdentity(conn)
+if identity != nil {
+    fmt.Printf("Connected Peer: %s (IP: %s)\n", identity.FromName(), identity.FromPublicIP())
 }
 ```
 
-**For UDP:**
-
-```go
-conn, _ := server.Accept()
-// Read essential to receive packet and populate identity
-conn.Read(buf) 
-
-if ec, ok := conn.(*facade.EnvelopedConnection); ok {
-    fmt.Printf("Last Packet From: %s\n", ec.LastIdentity.FromName())
-}
-```
+> [!NOTE]
+> For UDP (`udp-hello`), the identity is only available **after** the first packet has been successfully read, as it is extracted from the packet envelope.
 
 
 ## Python Bindings

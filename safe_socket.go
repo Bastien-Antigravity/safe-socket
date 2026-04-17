@@ -1,13 +1,18 @@
 package safesocket
 
 import (
+	"github.com/Bastien-Antigravity/safe-socket/src/facade"
 	"github.com/Bastien-Antigravity/safe-socket/src/factory"
 	"github.com/Bastien-Antigravity/safe-socket/src/interfaces"
 	"github.com/Bastien-Antigravity/safe-socket/src/models"
+	"github.com/Bastien-Antigravity/safe-socket/src/schemas"
 )
 
 // Socket is an alias for the Facade to simplify usage.
 type Socket = interfaces.Socket
+
+// Identity is an alias for the HelloMsg schema to simplify usage.
+type Identity = schemas.HelloMsg
 
 // SocketType aliases removed to simplify API. Use "client" or "server" strings.
 
@@ -30,6 +35,33 @@ func Create(profileName, address, publicIP string, socketType string, autoConnec
 // Use this to set Deadlines or other advanced config options.
 func CreateWithConfig(profileName, address string, config models.SocketConfig, socketType string, autoConnect bool) (Socket, error) {
 	return factory.CreateWithConfig(profileName, address, config, socketType, autoConnect)
+}
+
+// -----------------------------------------------------------------------------
+
+// GetIdentity extracts the client identity from a potentially wrapped connection.
+// It traverses through Heartbeat, Handshake, or Envelope wrappers to find the HelloMsg.
+func GetIdentity(conn interfaces.TransportConnection) *Identity {
+	if conn == nil {
+		return nil
+	}
+
+	// 1. Try HandshakeConnection (TCP/SHM Handshake)
+	if hc, ok := conn.(*facade.HandshakeConnection); ok {
+		return hc.Identity
+	}
+
+	// 2. Try EnvelopedConnection (UDP Stateless Identity)
+	if ec, ok := conn.(*facade.EnvelopedConnection); ok {
+		return ec.LastIdentity
+	}
+
+	// 3. Try peeling Heartbeat wrapper
+	if hb, ok := conn.(*facade.HeartbeatConnection); ok {
+		return GetIdentity(hb.TransportConnection)
+	}
+
+	return nil
 }
 
 // -----------------------------------------------------------------------------
