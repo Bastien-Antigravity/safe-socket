@@ -39,11 +39,17 @@ flowchart LR
     
     %% Styles
     style Start fill:#f5f5f5,stroke:#333,stroke-width:2px
-    style Result fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
-    style Parse fill:#fff9c4,stroke:#fbc02d
-    style Transport fill:#fff9c4,stroke:#fbc02d
-    style Proto fill:#fff9c4,stroke:#fbc02d
-    style Heartbeat fill:#fff9c4,stroke:#fbc02d
+    style Result fill:#0d47a1,stroke:#0d47a1,stroke-width:2px,color:#fff
+    style Parse fill:#e1f5fe,stroke:#01579b
+    style Transport fill:#e1f5fe,stroke:#01579b
+    style Proto fill:#e1f5fe,stroke:#01579b
+    style Heartbeat fill:#e1f5fe,stroke:#01579b
+    style DialTCP fill:#e1f5fe,stroke:#01579b
+    style DialUDP fill:#e1f5fe,stroke:#01579b
+    style DialSHM fill:#e1f5fe,stroke:#01579b
+    style Handshake fill:#e1f5fe,stroke:#01579b
+    style EnableHB fill:#e1f5fe,stroke:#01579b
+    style DisableHB fill:#e1f5fe,stroke:#01579b
 ```
 
 ## Layers
