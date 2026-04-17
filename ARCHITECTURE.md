@@ -14,34 +14,42 @@ tags:
 
 ```mermaid
 flowchart TD
-    %% Styles
-    classDef core fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1;
-    classDef net fill:#fff8e1,stroke:#fbc02d,stroke-width:2px,color:#f57f17;
+    User([User Application]) -- "Send/Receive/Open" --> Socket[Socket Facade]
     
-    %% Application Node Styling
-    style User fill:#37474f,stroke:#263238,stroke-width:3px,color:#ffffff
+    subgraph Factory ["Factory Layer (Creation)"]
+        direction TB
+        F1[Validate Profile] --> F2[Apply Defaults]
+        F2 --> F3[Assemble Stack]
+    end
 
-    User[User Application] --> Factory["Factory (Create/CreateSocket)"]:::core
-    Factory --> Facade[Facade Layer]:::core
-    
-    subgraph Facade Layer
+    Factory -.-> Socket
+
+    subgraph Stack ["Connection Onion (Internal)"]
         direction TB
-        Client[SocketClient]:::core
-        Server[SocketServer]:::core
+        H[Heartbeat Layer] --> P[Protocol Layer]
+        P --> T[Transport Layer]
+        
+        subgraph H ["Outermost: HeartbeatConnection"]
+            direction TB
+            h1["Background Ticker"]
+            h2["Activity Tracking"]
+        end
+        
+        subgraph P ["Middle: Handshake / Envelope"]
+            direction TB
+            p1["Identity (HelloMsg)"]
+            p2["Stateless UDP Wrapping"]
+        end
+        
+        subgraph T ["Core: Raw Transport"]
+            direction TB
+            t1["Framed TCP"]
+            t2["UDP / Transient"]
+            t3["SHM Ring Buffer"]
+        end
     end
-    style Facade fill:#edf7ff,stroke:#82b1ff,stroke-width:2px,color:#0d47a1
-    
-    Facade --> Protocol["Protocol Layer (Optional)"]:::net
-    Facade --> Transport[Transport Layer]:::net
-    Protocol --> Transport
-    
-    subgraph Transport Layer
-        direction TB
-        TCP[Framed TCP]:::net
-        UDP[UDP / Transient]:::net
-        SHM[Shared Memory Ring Buffer]:::net
-    end
-    style Transport fill:#fffde7,stroke:#fff176,stroke-width:2px,color:#f57f17
+
+    Socket --> Stack
 ```
 
 ## Layers
