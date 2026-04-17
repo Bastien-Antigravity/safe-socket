@@ -13,35 +13,43 @@ tags:
 ## High-Level Overview
 
 ```mermaid
-flowchart TD
-    %% Styles
-    classDef core fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1;
-    classDef net fill:#fff8e1,stroke:#fbc02d,stroke-width:2px,color:#f57f17;
+flowchart LR
+    Start([factory.Create]) -- "profile:identity" --> Parse{Parse Identity}
     
-    %% Application Node Styling
-    style User fill:#37474f,stroke:#263238,stroke-width:3px,color:#ffffff
-
-    User[User Application] --> Factory["Factory (Create/CreateSocket)"]:::core
-    Factory --> Facade[Facade Layer]:::core
+    Parse -- "Extract Name" --> Transport{Transport?}
     
-    subgraph Facade Layer
-        direction TB
-        Client[SocketClient]:::core
-        Server[SocketServer]:::core
-    end
-    style Facade fill:#edf7ff,stroke:#82b1ff,stroke-width:2px,color:#0d47a1
+    Transport -- "TCP" --> DialTCP[Connect TCP]
+    Transport -- "UDP" --> DialUDP[Connect UDP]
+    Transport -- "SHM" --> DialSHM[Connect SHM]
     
-    Facade --> Protocol["Protocol Layer (Optional)"]:::net
-    Facade --> Transport[Transport Layer]:::net
-    Protocol --> Transport
+    DialTCP --> Proto{Protocol?}
+    DialUDP --> Proto
+    DialSHM --> Proto
     
-    subgraph Transport Layer
-        direction TB
-        TCP[Framed TCP]:::net
-        UDP[UDP / Transient]:::net
-        SHM[Shared Memory Ring Buffer]:::net
-    end
-    style Transport fill:#fffde7,stroke:#fff176,stroke-width:2px,color:#f57f17
+    Proto -- "Hello" --> Handshake[Run Handshake]
+    Proto -- "None" --> Heartbeat{Check Thresholds}
+    
+    Handshake --> Heartbeat
+    
+    Heartbeat -- "> 300ms" --> EnableHB[Enable Heartbeat]
+    Heartbeat -- "< 300ms" --> DisableHB[Disable Heartbeat]
+    
+    EnableHB --> Result([Ready Socket])
+    DisableHB --> Result
+    
+    %% Native Mermaid Styles (GitHub Compatible)
+    style Start fill:#d32f2f,stroke:#b71c1c,stroke-width:2px,color:#fff
+    style Result fill:#2e7d32,stroke:#1b5e20,stroke-width:2px,color:#fff
+    style Parse fill:#ffd600,stroke:#ffab00,stroke-width:2px,color:#000
+    style Transport fill:#ffd600,stroke:#ffab00,stroke-width:2px,color:#000
+    style Proto fill:#ffd600,stroke:#ffab00,stroke-width:2px,color:#000
+    style Heartbeat fill:#ffd600,stroke:#ffab00,stroke-width:2px,color:#000
+    style DialTCP fill:#1565c0,stroke:#0d47a1,stroke-width:2px,color:#fff
+    style DialUDP fill:#1565c0,stroke:#0d47a1,stroke-width:2px,color:#fff
+    style DialSHM fill:#1565c0,stroke:#0d47a1,stroke-width:2px,color:#fff
+    style Handshake fill:#1565c0,stroke:#0d47a1,stroke-width:2px,color:#fff
+    style EnableHB fill:#1565c0,stroke:#0d47a1,stroke-width:2px,color:#fff
+    style DisableHB fill:#1565c0,stroke:#0d47a1,stroke-width:2px,color:#fff
 ```
 
 ## Layers
