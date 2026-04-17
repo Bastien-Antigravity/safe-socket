@@ -147,12 +147,13 @@ func (s *FramedTCPSocket) Read(p []byte) (n int, err error) {
 		// 2. Decode Length
 		length := binary.BigEndian.Uint32(header)
 
-		// HEARTBEAT: Length 0 frames are heartbeats. Discard and continue.
+		// HEARTBEAT: Length 0 frames are heartbeats. Consume and return n=0.
+		// This allows the caller to refresh deadlines.
 		if length == 0 {
 			if _, err := s.reader.Discard(4); err != nil {
 				return 0, err
 			}
-			continue
+			return 0, nil
 		}
 
 		// 3. Check Buffer Size BEFORE consuming header
@@ -184,9 +185,9 @@ func (s *FramedTCPSocket) ReadMessage() ([]byte, error) {
 		}
 		length := binary.BigEndian.Uint32(header)
 
-		// HEARTBEAT: Length 0 frames are heartbeats. Skip to next message.
+		// HEARTBEAT: Length 0 frames are heartbeats. Return empty buffer.
 		if length == 0 {
-			continue
+			return make([]byte, 0), nil
 		}
 
 		// 2. Allocate exact size

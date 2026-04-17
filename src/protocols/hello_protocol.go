@@ -31,6 +31,12 @@ func (p *HelloProtocol) Initiate(conn interfaces.TransportConnection, profile in
 		return errors.New("PublicIP is required in SocketConfig for HelloProtocol")
 	}
 
+	// Protocol Identity (Name) is required
+	appName := profile.GetName()
+	if appName == "" || appName == "TcpClient" {
+		return errors.New("a valid AppName must be provided in the SocketProfile for HelloProtocol (cannot be empty or 'TcpClient')")
+	}
+
 	// Cap'n Proto Message Construction
 	msg, seg, err := capnp.NewMessage(capnp.SingleSegment(nil))
 	if err != nil {
