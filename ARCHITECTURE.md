@@ -13,43 +13,37 @@ tags:
 ## High-Level Overview
 
 ```mermaid
-flowchart TD
-    User([User Application]) -- "Send/Receive/Open" --> Socket[Socket Facade]
+flowchart LR
+    Start([factory.Create]) -- "profile:identity" --> Parse{Parse Identity}
     
-    subgraph Factory ["Factory Layer (Creation)"]
-        direction TB
-        F1[Validate Profile] --> F2[Apply Defaults]
-        F2 --> F3[Assemble Stack]
-    end
-
-    Factory -.-> Socket
-
-    subgraph Stack ["Connection Onion (Internal)"]
-        direction TB
-        H[Heartbeat Layer] --> P[Protocol Layer]
-        P --> T[Transport Layer]
-        
-        subgraph H ["Outermost: HeartbeatConnection"]
-            direction TB
-            h1["Background Ticker"]
-            h2["Activity Tracking"]
-        end
-        
-        subgraph P ["Middle: Handshake / Envelope"]
-            direction TB
-            p1["Identity (HelloMsg)"]
-            p2["Stateless UDP Wrapping"]
-        end
-        
-        subgraph T ["Core: Raw Transport"]
-            direction TB
-            t1["Framed TCP"]
-            t2["UDP / Transient"]
-            t3["SHM Ring Buffer"]
-        end
-    end
-
-    Socket --> Stack
+    Parse -- "Extract Name" --> Transport{Transport?}
+    
+    Transport -- "TCP" --> DialTCP[Connect TCP]
+    Transport -- "UDP" --> DialUDP[Connect UDP]
+    Transport -- "SHM" --> DialSHM[Connect SHM]
+    
+    DialTCP --> Proto{Protocol?}
+    DialUDP --> Proto
+    DialSHM --> Proto
+    
+    Proto -- "Hello" --> Handshake[Run Handshake]
+    Proto -- "None" --> Heartbeat{Check Thresholds}
+    
+    Handshake --> Heartbeat
+    
+    Heartbeat -- "> 300ms" --> EnableHB[Enable Heartbeat]
+    Heartbeat -- "< 300ms" --> DisableHB[Disable Heartbeat]
+    
+    EnableHB --> Result([Ready Socket])
+    DisableHB --> Result
+    
+    %% Styles
+    style Start fill:#f5f5f5,stroke:#333,stroke-width:2px
+    style Result fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
+    style Parse fill:#fff9c4,stroke:#fbc02d
+    style Transport fill:#fff9c4,stroke:#fbc02d
+    style Proto fill:#fff9c4,stroke:#fbc02d
+    style Heartbeat fill:#fff9c4,stroke:#fbc02d
 ```
 
 ## Layers
