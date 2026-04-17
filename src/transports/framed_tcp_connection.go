@@ -27,21 +27,29 @@ func NewFramedTCPSocket(conn net.Conn, timeout time.Duration) *FramedTCPSocket {
 
 	// We no longer set a one-time absolute deadline here.
 	// Instead, the first Read/Write will refresh it if idleTimeout > 0.
-	s.refreshDeadline()
+	s.refreshReadDeadline()
+	s.refreshWriteDeadline()
 
 	return s
 }
 
-func (s *FramedTCPSocket) refreshDeadline() {
+func (s *FramedTCPSocket) refreshReadDeadline() {
 	if s.idleTimeout > 0 {
-		_ = s.Conn.SetDeadline(time.Now().Add(s.idleTimeout))
+		_ = s.Conn.SetReadDeadline(time.Now().Add(s.idleTimeout))
 	}
 }
 
-// SetIdleTimeout updates the internal idle timeout and refreshes the current deadline.
+func (s *FramedTCPSocket) refreshWriteDeadline() {
+	if s.idleTimeout > 0 {
+		_ = s.Conn.SetWriteDeadline(time.Now().Add(s.idleTimeout))
+	}
+}
+
+// SetIdleTimeout updates the internal idle timeout and refreshes current deadlines.
 func (s *FramedTCPSocket) SetIdleTimeout(d time.Duration) error {
 	s.idleTimeout = d
-	s.refreshDeadline()
+	s.refreshReadDeadline()
+	s.refreshWriteDeadline()
 	return nil
 }
 
@@ -113,7 +121,7 @@ func (s *FramedTCPSocket) SetWriteDeadline(t time.Time) error {
 
 // Write prepends length and writes data.
 func (s *FramedTCPSocket) Write(p []byte) (n int, err error) {
-	s.refreshDeadline()
+	s.refreshWriteDeadline()
 
 	// 1. Prepare Header (4 bytes length)Endian)
 	header := make([]byte, 4)
@@ -136,7 +144,7 @@ func (s *FramedTCPSocket) Write(p []byte) (n int, err error) {
 // HEARTBEAT UPDATE: Automatically skips frames with length 0.
 func (s *FramedTCPSocket) Read(p []byte) (n int, err error) {
 	for {
-		s.refreshDeadline()
+		s.refreshReadDeadline()
 		// 1. Peek content check
 		// We need 4 bytes for header.
 		header, err := s.reader.Peek(4)
@@ -177,7 +185,7 @@ func (s *FramedTCPSocket) Read(p []byte) (n int, err error) {
 // HEARTBEAT UPDATE: Automatically skips frames with length 0.
 func (s *FramedTCPSocket) ReadMessage() ([]byte, error) {
 	for {
-		s.refreshDeadline()
+		s.refreshReadDeadline()
 		// 1. Read Length
 		header := make([]byte, 4)
 		if _, err := io.ReadFull(s.reader, header); err != nil {

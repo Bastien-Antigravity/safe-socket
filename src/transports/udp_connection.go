@@ -25,7 +25,8 @@ func NewUdpSocket(conn *net.UDPConn, timeout time.Duration) *UdpSocket {
 		Conn:        conn,
 		idleTimeout: timeout,
 	}
-	s.refreshDeadline()
+	s.refreshReadDeadline()
+	s.refreshWriteDeadline()
 	return s
 }
 
@@ -37,20 +38,28 @@ func NewTransientUdpSocket(conn *net.UDPConn, addr *net.UDPAddr, data []byte, ti
 		RecvBuf:             data,
 		idleTimeout:         timeout,
 	}
-	s.refreshDeadline()
+	s.refreshReadDeadline()
+	s.refreshWriteDeadline()
 	return s
 }
 
-func (s *UdpSocket) refreshDeadline() {
+func (s *UdpSocket) refreshReadDeadline() {
 	if s.idleTimeout > 0 {
-		_ = s.Conn.SetDeadline(time.Now().Add(s.idleTimeout))
+		_ = s.Conn.SetReadDeadline(time.Now().Add(s.idleTimeout))
 	}
 }
 
-// SetIdleTimeout updates the internal idle timeout and refreshes the current deadline.
+func (s *UdpSocket) refreshWriteDeadline() {
+	if s.idleTimeout > 0 {
+		_ = s.Conn.SetWriteDeadline(time.Now().Add(s.idleTimeout))
+	}
+}
+
+// SetIdleTimeout updates the internal idle timeout and refreshes current deadlines.
 func (s *UdpSocket) SetIdleTimeout(d time.Duration) error {
 	s.idleTimeout = d
-	s.refreshDeadline()
+	s.refreshReadDeadline()
+	s.refreshWriteDeadline()
 	return nil
 }
 
@@ -60,7 +69,7 @@ func (s *UdpSocket) SetIdleTimeout(d time.Duration) error {
 // Warning: Messages larger than MTU (usually 1500 bytes) will be fragmented.
 // Messages larger than 64KB will fail.
 func (s *UdpSocket) Write(p []byte) (n int, err error) {
-	s.refreshDeadline()
+	s.refreshWriteDeadline()
 	// OPTIMIZATION: Removed SetWriteDeadline logic from hot path.
 
 	// If this is a transient server socket, reply to the specific remote address
@@ -77,7 +86,7 @@ func (s *UdpSocket) Write(p []byte) (n int, err error) {
 // Read reads a datagram.
 // Note: If 'p' is smaller than the incoming datagram, the excess data is discarded by the OS.
 func (s *UdpSocket) Read(p []byte) (n int, err error) {
-	s.refreshDeadline()
+	s.refreshReadDeadline()
 	// If we have a pre-read buffer (Transient Server Socket), return it immediately
 	if s.RecvBuf != nil {
 		n := copy(p, s.RecvBuf)
@@ -94,7 +103,7 @@ func (s *UdpSocket) Read(p []byte) (n int, err error) {
 // ReadMessage for UDP allocates a buffer large enough for a standard UDP packet (64KB max),
 // reads, and returns the sliced data.
 func (s *UdpSocket) ReadMessage() ([]byte, error) {
-	s.refreshDeadline()
+	s.refreshReadDeadline()
 	// If we have a pre-read buffer (Transient Server Socket), return it immediately
 	if s.RecvBuf != nil {
 		result := make([]byte, len(s.RecvBuf))

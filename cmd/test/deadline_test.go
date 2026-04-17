@@ -57,15 +57,17 @@ func TestServerConfigDeadline(t *testing.T) {
 		errChan <- nil
 	}()
 
-	// 2. Client Connects with Heartbeat Disabled (-1) to allow timeout testing
+	// 2. Client Connects with Heartbeat Disabled (-1)
+	// We disable client heartbeats to ensure the Server actually times out.
 	client, err := factory.CreateWithConfig("tcp", addr, models.SocketConfig{HeartbeatInterval: -1}, "client", true)
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
 	}
 	defer client.Close()
 
-	// 3. Client Sleeps longer than Server Deadline (300ms > 200ms)
-	time.Sleep(500 * time.Millisecond)
+	// 3. Client Sleeps longer than Server Deadline (800ms > 200ms)
+	// Increased to 800ms for stability under -race flag
+	time.Sleep(800 * time.Millisecond)
 	client.Send([]byte("PING"))
 
 	// 4. Verify Server Error

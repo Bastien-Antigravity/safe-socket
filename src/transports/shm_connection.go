@@ -61,23 +61,29 @@ func NewShmTransport(f *os.File, m mmap.MMap, timeout time.Duration) *ShmTranspo
 
 	if timeout > 0 {
 		t.idleTimeout = timeout
-		t.refreshDeadline()
+		t.refreshReadDeadline()
+		t.refreshWriteDeadline()
 	}
 	return t
 }
 
-func (t *ShmTransport) refreshDeadline() {
+func (t *ShmTransport) refreshReadDeadline() {
 	if t.idleTimeout > 0 {
-		deadline := time.Now().Add(t.idleTimeout)
-		t.readDeadline = deadline
-		t.writeDeadline = deadline
+		t.readDeadline = time.Now().Add(t.idleTimeout)
 	}
 }
 
-// SetIdleTimeout updates the internal idle timeout and refreshes the current deadline.
+func (t *ShmTransport) refreshWriteDeadline() {
+	if t.idleTimeout > 0 {
+		t.writeDeadline = time.Now().Add(t.idleTimeout)
+	}
+}
+
+// SetIdleTimeout updates the internal idle timeout and refreshes current deadlines.
 func (t *ShmTransport) SetIdleTimeout(d time.Duration) error {
 	t.idleTimeout = d
-	t.refreshDeadline()
+	t.refreshReadDeadline()
+	t.refreshWriteDeadline()
 	return nil
 }
 
@@ -147,7 +153,7 @@ func (t *ShmTransport) Write(p []byte) (n int, err error) {
 		// Commit-Store ensure data is visible before index update (on x86 this is free, on ARM needs barrier)
 		// Go atomic.Store acts as a release barrier.
 		atomic.AddUint64(t.Tail, lenData)
-		t.refreshDeadline()
+		t.refreshWriteDeadline()
 
 		return int(lenData), nil
 	}
@@ -198,7 +204,7 @@ func (t *ShmTransport) Read(p []byte) (n int, err error) {
 
 		// Commit: Update Head
 		atomic.AddUint64(t.Head, toRead)
-		t.refreshDeadline()
+		t.refreshReadDeadline()
 
 		return int(toRead), nil
 	}
