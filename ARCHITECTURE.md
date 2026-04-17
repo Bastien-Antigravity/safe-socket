@@ -38,7 +38,7 @@ flowchart LR
     DisableHB --> Result
     
     %% Native Mermaid Styles (GitHub Compatible)
-    style Start fill:#eceff1,stroke:#333,stroke-width:2px
+    style Start fill:#d32f2f,stroke:#b71c1c,stroke-width:2px,color:#fff
     style Result fill:#2e7d32,stroke:#1b5e20,stroke-width:2px,color:#fff
     style Parse fill:#ffd600,stroke:#ffab00,stroke-width:2px,color:#000
     style Transport fill:#ffd600,stroke:#ffab00,stroke-width:2px,color:#000
