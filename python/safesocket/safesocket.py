@@ -1,7 +1,7 @@
 import ctypes
 import os
 import sys
-from typing import Optional, Union
+from typing import Optional
 
 # Find the shared library
 base_path = os.path.dirname(os.path.abspath(__file__))
