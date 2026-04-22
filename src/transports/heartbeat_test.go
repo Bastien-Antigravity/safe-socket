@@ -52,19 +52,7 @@ func TestFramedTCPHeartbeatRead(t *testing.T) {
 
 	sock := NewFramedTCPSocket(rawConn, 1*time.Second)
 
-	// 4. Verify heartbeats return n=0
-	for i := 0; i < 3; i++ {
-		buf := make([]byte, 1024)
-		n, err := sock.Read(buf)
-		if err != nil {
-			t.Errorf("Iteration %d: Expected no error on heartbeat, got %v", i, err)
-		}
-		if n != 0 {
-			t.Errorf("Iteration %d: Expected n=0 for heartbeat, got %d", i, n)
-		}
-	}
-
-	// 5. Verify subsequent payload is read correctly
+	// 4. Verify heartbeats are skipped and we get the payload directly
 	buf := make([]byte, 1024)
 	n, err := sock.Read(buf)
 	if err != nil {
@@ -100,17 +88,8 @@ func TestFramedTCPHeartbeatReadMessage(t *testing.T) {
 	defer rawConn.Close()
 	sock := NewFramedTCPSocket(rawConn, 1*time.Second)
 
-	// Heartbeat
+	// Verify heartbeat is skipped and we get the payload
 	msg, err := sock.ReadMessage()
-	if err != nil {
-		t.Errorf("Expected no error on heartbeat, got %v", err)
-	}
-	if len(msg) != 0 {
-		t.Errorf("Expected empty buffer for heartbeat, got %d bytes", len(msg))
-	}
-
-	// Payload
-	msg, err = sock.ReadMessage()
 	if err != nil {
 		t.Fatalf("Failed to read message: %v", err)
 	}

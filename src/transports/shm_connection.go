@@ -259,7 +259,10 @@ func (t *ShmTransport) ReadMessage() ([]byte, error) {
 
 func (t *ShmTransport) Close() error {
 	// Flush? MMap usually syncs periodically.
-	t.MMap.Unmap()
+	if err := t.MMap.Unmap(); err != nil {
+		_ = t.File.Close() // Best effort close file
+		return err
+	}
 	return t.File.Close()
 }
 

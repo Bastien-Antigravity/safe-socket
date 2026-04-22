@@ -86,9 +86,7 @@ func (c *SocketClient) Open() error {
 	} else if c.Profile.GetProtocol() != "" && c.Profile.GetProtocol() != interfaces.ProtocolNone {
 		// Case B: Connection-Oriented (TCP/SHM) + Hello
 		// Perform Standard Handshake
-		var proto interfaces.Protocol
-		// Currently only one protocol supported
-		proto = protocols.NewHelloProtocol()
+		proto := protocols.NewHelloProtocol()
 
 		if err := proto.Initiate(conn, c.Profile, c.Config); err != nil {
 			conn.Close()

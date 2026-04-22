@@ -123,7 +123,7 @@ func TestTCP_Raw_Write_Method(t *testing.T) {
 			return
 		}
 
-		conn.Write([]byte("ACK"))
+		_, _ = conn.Write([]byte("ACK"))
 		errChan <- nil
 	}()
 
@@ -188,7 +188,7 @@ func TestTCP_Hello(t *testing.T) {
 		// If accepted, handshake succeeded. Just echo.
 		buf := make([]byte, 1024)
 		n, _ := conn.Read(buf)
-		conn.Write(buf[:n])
+		_, _ = conn.Write(buf[:n])
 
 		errChan <- nil
 	}()

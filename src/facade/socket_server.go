@@ -100,9 +100,7 @@ func (s *SocketServer) Accept() (interfaces.TransportConnection, error) {
 	} else if s.Profile.GetProtocol() != "" && s.Profile.GetProtocol() != interfaces.ProtocolNone {
 		// Case B: Connection-Oriented (TCP) + Hello
 		// Perform Standard Handshake (Wait for Client to send Hello)
-		var proto interfaces.Protocol
-		// Currently only one protocol supported
-		proto = protocols.NewHelloProtocol()
+		proto := protocols.NewHelloProtocol()
 
 		// Note: The handshake itself will respect the Deadline set in 1b because it uses Read/Write on the conn.
 		helloMsg, err := proto.WaitInitiation(conn)

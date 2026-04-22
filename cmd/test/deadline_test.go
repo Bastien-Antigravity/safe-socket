@@ -52,6 +52,7 @@ func TestServerConfigDeadline(t *testing.T) {
 		if err.Error() != "read tcp 127.0.0.1:9050->127.0.0.1:54321: i/o timeout" {
 			// Check standard 'timeout' interface or string contains
 			// Relaxing check to just ensure error occurred, ideally checking net.Error.Timeout()
+			t.Logf("Server Read failed (expected timeout): %v", err)
 		}
 		t.Logf("Server Read correctly failed with: %v", err)
 		errChan <- nil
@@ -68,7 +69,7 @@ func TestServerConfigDeadline(t *testing.T) {
 	// 3. Client Sleeps longer than Server Deadline (800ms > 200ms)
 	// Increased to 800ms for stability under -race flag
 	time.Sleep(800 * time.Millisecond)
-	client.Send([]byte("PING"))
+	_ = client.Send([]byte("PING"))
 
 	// 4. Verify Server Error
 	select {
@@ -95,7 +96,7 @@ func TestClientDynamicDeadline(t *testing.T) {
 		defer conn.Close()
 		// Wait 500ms then send
 		time.Sleep(500 * time.Millisecond)
-		conn.Write([]byte("LATE_RESPONSE"))
+		_, _ = conn.Write([]byte("LATE_RESPONSE"))
 	}()
 
 	// 2. Setup Client
@@ -185,9 +186,9 @@ func TestIdleTimeoutRefresh(t *testing.T) {
 	defer client.Close()
 
 	// 3. Send PINGs to keep it alive
-	client.Send([]byte("PING1"))
+	_ = client.Send([]byte("PING1"))
 	time.Sleep(250 * time.Millisecond)
-	client.Send([]byte("PING2"))
+	_ = client.Send([]byte("PING2"))
 
 	select {
 	case <-done:
