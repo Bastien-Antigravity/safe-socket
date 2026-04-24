@@ -148,6 +148,16 @@ func (s *SocketServer) Accept() (interfaces.TransportConnection, error) {
 
 // -----------------------------------------------------------------------------
 
+// GetAddr returns the listener's network address, if the server is listening.
+func (s *SocketServer) GetAddr() (string, error) {
+	if s.listener == nil {
+		return "", errors.New("server not listening")
+	}
+	return s.listener.Addr().String(), nil
+}
+
+// -----------------------------------------------------------------------------
+
 // Close stops the server.
 func (s *SocketServer) Close() error {
 	if s.listener != nil {
