@@ -38,18 +38,17 @@ go get github.com/Bastien-Antigravity/safe-socket
 Use `safesocket.Create` to instantiate and connect in one line.
 
 ```go
-package main
-
 import (
-    "log"
-    "github.com/Bastien-Antigravity/safe-socket"
+	"log"
+
+	safe_socket "github.com/Bastien-Antigravity/safe-socket"
 )
 
 func main() {
     // Example: Connect to a server using TCP with Hello Handshake
     // publicIP: Optional (automatically resolved if empty)
     // socketType: "client" or "server"
-    socket, err := safesocket.Create("tcp-hello", "127.0.0.1:9000", "", "client", true)
+    socket, err := safe_socket.Create("tcp-hello", "127.0.0.1:9000", "", "client", true)
     if err != nil {
         log.Fatal(err)
     }
@@ -93,7 +92,7 @@ config := models.SocketConfig{
 // Note: Use Deadline: 0 for a completely open (infinite) connection.
 
 // CreateWithConfig(profile, address, config, type, autoConnect)
-socket, err := safesocket.CreateWithConfig("tcp-hello", "127.0.0.1:9000", config, "server", true)
+socket, err := safe_socket.CreateWithConfig("tcp-hello", "127.0.0.1:9000", config, "server", true)
 if err != nil {
     log.Fatal(err)
 }
