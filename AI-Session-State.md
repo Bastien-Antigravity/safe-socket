@@ -16,13 +16,14 @@ directives:
 ## 🚀 Progress Tracking
 - [x] Initialized session state tracking for this repository.
 - [x] Synchronized with the Global Obsidian Brain.
-- [x] **Aggressive Responsiveness**: Implemented 500ms network / 200ms local defaults.
-- [x] **Python Parity**: Successfully aligned Python API with Go (SocketConfig, CreateWithConfig).
-- [x] **Documentation Sync**: Updated all technical docs (*.md) to reflect the new state.
+- [x] **v1.9.0 Stability**: Implemented "Infinite Wait" (0) logic across all transport layers.
+- [x] **Polyglot Forever**: Updated C API and Python wrapper to support `set_idle_timeout(0)`.
+- [x] **Zombie Detection Verified**: Added unit tests for silent-peer detection and forever-wait persistence.
 
 ## 🐛 Local Issues / Bugs
 - None identified.
 
 ## ⏭ Next Actions
+- [ ] Propagate v1.9.0 to `microservice-toolbox` and dependent microservices.
 - [ ] Implement environment variable overrides for timeouts.
 - [ ] Research `microservice-toolbox` integration for PublicIP refresh.

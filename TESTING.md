@@ -39,8 +39,15 @@ We verify that heartbeats are correctly disabled when the deadline is too low to
 
 ### 3. Handshake & Identity
 Tests in `factory_test.go` and `hello_test.go` ensure that:
-- Compound profiles (`tcp-hello:my-app`) correctly inject identity.
 - Identity is preserved and extractable via `GetIdentity(conn)`.
+
+### 4. Infinite Wait (Forever)
+`TestForeverTimeoutParity` (in `transports`) confirms that setting `idleTimeout = 0` successfully clears all system deadlines. 
+- **Verification**: The test intentionally waits for a period 4x longer than the initial default (400ms vs 100ms) to ensure the connection remains open.
+
+### 5. Zombie Connection Detection
+`TestZombieDetection` (in `facade`) simulates a peer that is connected but completely silent.
+- **Verification**: Confirms that while standard connections remove zombies via timeouts, "Forever" connections prioritize persistence over detection.
 
 ## 🧪 Simulation Tools
 

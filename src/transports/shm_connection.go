@@ -35,6 +35,7 @@ type ShmTransport struct {
 	readDeadline  time.Time
 	writeDeadline time.Time
 	idleTimeout   time.Duration
+	closed        atomic.Bool
 }
 
 // -----------------------------------------------------------------------------
@@ -70,26 +71,25 @@ func NewShmTransport(f *os.File, m mmap.MMap, timeout time.Duration) *ShmTranspo
 func (t *ShmTransport) refreshReadDeadline() {
 	if t.idleTimeout > 0 {
 		t.readDeadline = time.Now().Add(t.idleTimeout)
-	} else if t.idleTimeout == 0 {
-		// Explicitly clear deadline for 'forever' wait
-		t.readDeadline = time.Time{}
 	}
 }
 
 func (t *ShmTransport) refreshWriteDeadline() {
 	if t.idleTimeout > 0 {
 		t.writeDeadline = time.Now().Add(t.idleTimeout)
-	} else if t.idleTimeout == 0 {
-		// Explicitly clear deadline for 'forever' wait
-		t.writeDeadline = time.Time{}
 	}
 }
 
 // SetIdleTimeout updates the internal idle timeout and refreshes current deadlines.
 func (t *ShmTransport) SetIdleTimeout(d time.Duration) error {
 	t.idleTimeout = d
-	t.refreshReadDeadline()
-	t.refreshWriteDeadline()
+	if d == 0 {
+		t.readDeadline = time.Time{}
+		t.writeDeadline = time.Time{}
+	} else {
+		t.refreshReadDeadline()
+		t.refreshWriteDeadline()
+	}
 	return nil
 }
 
@@ -133,6 +133,9 @@ func (t *ShmTransport) Write(p []byte) (n int, err error) {
 		// Capacity check: Tail - Head < BufferDataSize
 		if tail-head+lenData > BufferDataSize {
 			// Full. Spin-wait.
+			if t.closed.Load() {
+				return 0, io.ErrClosedPipe
+			}
 			// OPTIMIZATION: Check deadline ONLY when blocked
 			if !t.writeDeadline.IsZero() && time.Now().After(t.writeDeadline) {
 				return 0, os.ErrDeadlineExceeded
@@ -176,6 +179,9 @@ func (t *ShmTransport) Read(p []byte) (n int, err error) {
 
 		if head == tail {
 			// Empty. Spin-wait.
+			if t.closed.Load() {
+				return 0, io.EOF
+			}
 			// OPTIMIZATION: Check deadline ONLY when blocked
 			if !t.readDeadline.IsZero() && time.Now().After(t.readDeadline) {
 				return 0, os.ErrDeadlineExceeded
@@ -228,6 +234,9 @@ func (t *ShmTransport) ReadMessage() ([]byte, error) {
 
 		if head == tail {
 			// Empty. Spin-wait.
+			if t.closed.Load() {
+				return nil, io.EOF
+			}
 			// OPTIMIZATION: Check deadline ONLY when blocked
 			if !t.readDeadline.IsZero() && time.Now().After(t.readDeadline) {
 				return nil, os.ErrDeadlineExceeded
@@ -264,6 +273,11 @@ func (t *ShmTransport) ReadMessage() ([]byte, error) {
 // -----------------------------------------------------------------------------
 
 func (t *ShmTransport) Close() error {
+	// Mark as closed BEFORE unmapping to stop spin-loops safely
+	if t.closed.Swap(true) {
+		return nil // Already closed
+	}
+	
 	// Flush? MMap usually syncs periodically.
 	if err := t.MMap.Unmap(); err != nil {
 		_ = t.File.Close() // Best effort close file

@@ -93,7 +93,8 @@ Deadlines are handled at two levels:
     -   **Networking (TCP/UDP)**: Disabled if Deadline < 300ms.
     -   **Local (127.0.0.1)**: Disabled if Deadline < 150ms.
     -   **SHM**: Disabled if Deadline < 50ms.
-5.  **Explicit Control & Dynamic Updates**: `SetIdleTimeout(duration)` allows runtime adjustments. Setting a `Deadline` of `0` triggers the responsive defaults (500ms/200ms).
+5.  **Infinite Wait (Forever)**: Setting `idleTimeout` to `0` (via `SocketConfig.Deadline` or `SetIdleTimeout(0)`) disables all internal activity-refresh timers. It explicitly clears the underlying kernel-level deadlines (TCP/UDP) or spin-wait limits (SHM), allowing the connection to remain idle indefinitely until explicitly closed or the network pipe breaks.
+6.  **Explicit Control & Dynamic Updates**: `SetIdleTimeout(duration)` allows runtime adjustments. Setting a `Deadline` value `> 0` activates the activity-refresh model.
 
 ### Identity Propagation (Compound Profiles)
 

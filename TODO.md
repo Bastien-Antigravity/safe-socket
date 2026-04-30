@@ -12,10 +12,16 @@
         - `SAFE_SOCKET_DEADLINE_MS`
         - `SAFE_SOCKET_HEARTBEAT_MS`
 
+## ✅ Completed (v1.9.0)
+- [x] **Infinite Wait Architecture**: Native support for `idleTimeout = 0` (Forever) across TCP, UDP, and SHM.
+- [x] **Zombie Connection Parity**: Verified detection/persistence behavior in silent-peer scenarios.
+- [x] **CAPI/Python Parity**: Full support for `set_idle_timeout` in the shared library and Python wheel.
+
 ## Technical Debt & New Features
 
 - [ ] **Rust Implementation**: Create a native Rust version of the library to eliminate the Go-to-C bridge overhead in high-performance Rust microservices.
 - [ ] **Enhanced SHM**: Explore `MONITOR`/`MWAIT` polling in more detail for zero-CPU spin-wait on supported architectures.
+- [ ] **NATS Transport**: Evaluate adding a NATS-based transport for pub/sub and distributed messaging patterns.
 
 ---
 
