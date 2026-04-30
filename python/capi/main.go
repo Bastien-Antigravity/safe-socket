@@ -271,6 +271,38 @@ func SocketAccept(handle int32) int32 {
 	return Register(conn)
 }
 
+//export SocketSetIdleTimeout
+func SocketSetIdleTimeout(handle int32, seconds C.double) int32 {
+	val, ok := Get(handle)
+	if !ok {
+		setError(errors.New("invalid handle"))
+		return -1
+	}
+
+	timeout := time.Duration(float64(seconds) * float64(time.Second))
+
+	if sock, ok := val.(interfaces.Socket); ok {
+		err := sock.SetIdleTimeout(timeout)
+		setError(err)
+		if err != nil {
+			return -1
+		}
+		return 0
+	}
+
+	if conn, ok := val.(interfaces.TransportConnection); ok {
+		err := conn.SetIdleTimeout(timeout)
+		setError(err)
+		if err != nil {
+			return -1
+		}
+		return 0
+	}
+
+	setError(errors.New("invalid handle type for SetIdleTimeout"))
+	return -1
+}
+
 //export SocketSetDeadline
 func SocketSetDeadline(handle int32, seconds C.double) int32 {
 	val, ok := Get(handle)

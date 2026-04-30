@@ -36,12 +36,18 @@ func NewFramedTCPSocket(conn net.Conn, timeout time.Duration) *FramedTCPSocket {
 func (s *FramedTCPSocket) refreshReadDeadline() {
 	if s.idleTimeout > 0 {
 		_ = s.Conn.SetReadDeadline(time.Now().Add(s.idleTimeout))
+	} else if s.idleTimeout == 0 {
+		// Explicitly clear deadline for 'forever' wait
+		_ = s.Conn.SetReadDeadline(time.Time{})
 	}
 }
 
 func (s *FramedTCPSocket) refreshWriteDeadline() {
 	if s.idleTimeout > 0 {
 		_ = s.Conn.SetWriteDeadline(time.Now().Add(s.idleTimeout))
+	} else if s.idleTimeout == 0 {
+		// Explicitly clear deadline for 'forever' wait
+		_ = s.Conn.SetWriteDeadline(time.Time{})
 	}
 }
 

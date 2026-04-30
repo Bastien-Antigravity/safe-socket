@@ -45,6 +45,9 @@ lib.SocketAccept.restype = ctypes.c_int32
 lib.SocketSetDeadline.argtypes = [ctypes.c_int32, ctypes.c_double]
 lib.SocketSetDeadline.restype = ctypes.c_int32
 
+lib.SocketSetIdleTimeout.argtypes = [ctypes.c_int32, ctypes.c_double]
+lib.SocketSetIdleTimeout.restype = ctypes.c_int32
+
 lib.GetSocketError.argtypes = []
 lib.GetSocketError.restype = ctypes.c_char_p
 
@@ -126,6 +129,10 @@ class SafeSocket:
         if lib.SocketSetDeadline(self.handle, ctypes.c_double(seconds)) == -1:
             raise SafeSocketError(_get_last_error())
 
+    def set_idle_timeout(self, seconds: float):
+        if lib.SocketSetIdleTimeout(self.handle, ctypes.c_double(seconds)) == -1:
+            raise SafeSocketError(_get_last_error())
+
     def __enter__(self):
         return self
 
@@ -161,6 +168,10 @@ class SafeSocketConnection:
 
     def set_deadline(self, seconds: float):
         if lib.SocketSetDeadline(self.handle, ctypes.c_double(seconds)) == -1:
+            raise SafeSocketError(_get_last_error())
+
+    def set_idle_timeout(self, seconds: float):
+        if lib.SocketSetIdleTimeout(self.handle, ctypes.c_double(seconds)) == -1:
             raise SafeSocketError(_get_last_error())
 
     def __enter__(self):

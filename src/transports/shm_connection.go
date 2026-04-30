@@ -70,12 +70,18 @@ func NewShmTransport(f *os.File, m mmap.MMap, timeout time.Duration) *ShmTranspo
 func (t *ShmTransport) refreshReadDeadline() {
 	if t.idleTimeout > 0 {
 		t.readDeadline = time.Now().Add(t.idleTimeout)
+	} else if t.idleTimeout == 0 {
+		// Explicitly clear deadline for 'forever' wait
+		t.readDeadline = time.Time{}
 	}
 }
 
 func (t *ShmTransport) refreshWriteDeadline() {
 	if t.idleTimeout > 0 {
 		t.writeDeadline = time.Now().Add(t.idleTimeout)
+	} else if t.idleTimeout == 0 {
+		// Explicitly clear deadline for 'forever' wait
+		t.writeDeadline = time.Time{}
 	}
 }
 

@@ -75,7 +75,8 @@ func main() {
     // n, _ := socket.Read(buf)
 
     // NEW: Update Idle Timeout at runtime
-    socket.SetIdleTimeout(5 * time.Second)
+    // Use 0 to disable timeouts and wait 'forever'
+    socket.SetIdleTimeout(0)
 }
 ```
 
@@ -89,7 +90,8 @@ config := models.SocketConfig{
     Deadline: 5 * time.Minute, // Idle Timeout: Connection stays alive as long as active
 }
 
-// Note: Use Deadline: 0 for a completely open (infinite) connection.
+// Note: Use Deadline: 0 (or config.SetIdleTimeout(0)) for a completely open (infinite) connection.
+// This is now supported across TCP, UDP, and Shared Memory transports.
 
 // CreateWithConfig(profile, address, config, type, autoConnect)
 socket, err := safe_socket.CreateWithConfig("tcp-hello", "127.0.0.1:9000", config, "server", true)
@@ -233,6 +235,14 @@ with safesocket.create_with_config("tcp-hello", "0.0.0.0:9000", config, socket_t
     with conn:
         data = conn.receive()
         conn.send(b"Echo: " + data)
+
+# 3. Infinite Wait (Forever)
+# Disables the internal idle timer entirely
+with safesocket.create("tcp-hello", "127.0.0.1:9000") as client:
+    client.open()
+    client.set_idle_timeout(0)
+    # This will now block indefinitely until data arrives or the OS kills the socket
+    data = client.receive()
 ```
 
 ## Compilation Note

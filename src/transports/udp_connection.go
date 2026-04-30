@@ -46,12 +46,18 @@ func NewTransientUdpSocket(conn *net.UDPConn, addr *net.UDPAddr, data []byte, ti
 func (s *UdpSocket) refreshReadDeadline() {
 	if s.idleTimeout > 0 {
 		_ = s.Conn.SetReadDeadline(time.Now().Add(s.idleTimeout))
+	} else if s.idleTimeout == 0 {
+		// Explicitly clear deadline for 'forever' wait
+		_ = s.Conn.SetReadDeadline(time.Time{})
 	}
 }
 
 func (s *UdpSocket) refreshWriteDeadline() {
 	if s.idleTimeout > 0 {
 		_ = s.Conn.SetWriteDeadline(time.Now().Add(s.idleTimeout))
+	} else if s.idleTimeout == 0 {
+		// Explicitly clear deadline for 'forever' wait
+		_ = s.Conn.SetWriteDeadline(time.Time{})
 	}
 }
 
