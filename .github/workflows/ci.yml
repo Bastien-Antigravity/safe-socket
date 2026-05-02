@@ -1,4 +1,4 @@
-name: CI Standard Pipeline
+name: CI Verification
 
 on:
   push:
@@ -7,36 +7,43 @@ on:
     branches: [ develop, main ]
 
 jobs:
-  validate:
+  verify-go:
+    name: Go Core Verification
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      # Go Validation (if applicable)
+      
       - name: Set up Go
-        if: hashFiles('go.mod') != ''
         uses: actions/setup-go@v5
         with:
           go-version: '1.22'
+          
+      - name: Install Cap'n Proto
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y capnproto
+          go install capnproto.org/go/capnp/v3/capnpc-go@latest
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+
       - name: Go Lint & Test
-        if: hashFiles('go.mod') != ''
         run: |
           go fmt ./...
           go test -v ./...
 
-      # Python Validation (if applicable)
+  verify-python:
+    name: Python Wrapper Verification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
       - name: Set up Python
-        if: hashFiles('requirements.txt') != ''
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          
       - name: Python Lint & Test
-        if: hashFiles('requirements.txt') != ''
         run: |
-          pip install -r requirements.txt
+          cd python
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [ -f pyproject.toml ]; then pip install .; fi
           pytest
-
-      # Sandbox Integration (Global)
-      - name: Run Sandbox Integration
-        run: echo "Triggering sandbox-testing workflow..."
-        # This would typically use a repository_dispatch or a shared action
