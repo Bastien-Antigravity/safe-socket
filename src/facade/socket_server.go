@@ -10,6 +10,7 @@ import (
 	"github.com/Bastien-Antigravity/safe-socket/src/models"
 	"github.com/Bastien-Antigravity/safe-socket/src/protocols"
 	"github.com/Bastien-Antigravity/safe-socket/src/transports"
+	"sync"
 )
 
 // SocketServer implements the interfaces.Socket interface for Server-side operations.
@@ -22,6 +23,7 @@ type SocketServer struct {
 	Config   models.SocketConfig
 	listener interfaces.TransportListener
 	Logger   *interfaces.Logger
+	wg       sync.WaitGroup
 }
 
 // -----------------------------------------------------------------------------
@@ -78,6 +80,13 @@ func (s *SocketServer) Accept() (interfaces.TransportConnection, error) {
 	conn, err := s.listener.Accept()
 	if err != nil {
 		return nil, err
+	}
+
+	// 1a. Track connection for synchronous shutdown
+	s.wg.Add(1)
+	conn = &trackingConnection{
+		TransportConnection: conn,
+		onClose:             s.wg.Done,
 	}
 
 	// 1b. Apply Server Config Deadline (Idle Timeout)
@@ -158,14 +167,35 @@ func (s *SocketServer) GetAddr() (string, error) {
 
 // -----------------------------------------------------------------------------
 
-// Close stops the server.
+// Close stops the server and optionally waits for all active connections to finish.
+// Set Config.Deadline to a positive value to limit the wait time (not yet implemented for WG wait).
 func (s *SocketServer) Close() error {
 	if s.listener != nil {
 		err := s.listener.Close()
 		s.listener = nil
+
+		// Wait for active connections to finish
+		s.wg.Wait()
+
 		return err
 	}
 	return nil
+}
+
+// trackingConnection wraps a TransportConnection to signal when it's closed.
+type trackingConnection struct {
+	interfaces.TransportConnection
+	onClose func()
+	once    sync.Once
+}
+
+func (c *trackingConnection) Close() error {
+	var err error
+	c.once.Do(func() {
+		err = c.TransportConnection.Close()
+		c.onClose()
+	})
+	return err
 }
 
 // -----------------------------------------------------------------------------

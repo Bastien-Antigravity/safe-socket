@@ -1,8 +1,8 @@
 # TODO: safe-socket
 
 ## 🚨 High Priority (Governance Gaps)
-- [ ] **OOM Protection**: Implement `MaxPayloadSize` check in `ReadMessage` to prevent memory exhaustion from oversized frames (FEAT-004). (Approval Required)
-- [ ] **Synchronous Shutdown**: Implement a wait-state in `Close()` to ensure all background goroutines and buffers are flushed before returning (FEAT-003). (Approval Required)
+- [x] **OOM Protection**: Implement `MaxPayloadSize` check in `ReadMessage` to prevent memory exhaustion from oversized frames (FEAT-004).
+- [x] **Synchronous Shutdown**: Implement a wait-state in `Close()` to ensure all background goroutines and buffers are flushed before returning (FEAT-003).
 - [ ] **Autonomous Reconnection**: Implement a retry loop with jittered exponential backoff in `SocketClient.Open` (FEAT-005). (Approval Required)
 
 ## 🏗️ Architecture & Refactoring
