@@ -22,4 +22,11 @@ type SocketConfig struct {
 
 	// HandshakeTimeout is the time allowed for the initial protocol handshake.
 	HandshakeTimeout time.Duration
+
+	// MaxRetries is the number of times to attempt reconnection if Open() fails.
+	// Set to -1 for infinite retries.
+	MaxRetries int
+
+	// RetryInterval is the time between reconnection attempts.
+	RetryInterval time.Duration
 }

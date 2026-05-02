@@ -34,11 +34,34 @@ func NewSocketClient(p interfaces.SocketProfile, c models.SocketConfig) *SocketC
 // -----------------------------------------------------------------------------
 
 // Open establishes the connection using the configured transport and protocol.
+// If MaxRetries > 0, it will attempt reconnection on failure.
 func (c *SocketClient) Open() error {
 	if c.transport != nil {
 		return errors.New("socket already open")
 	}
 
+	retries := 0
+	for {
+		err := c.attemptOpen()
+		if err == nil {
+			return nil
+		}
+
+		// Check if we should retry
+		if c.Config.MaxRetries == 0 || (c.Config.MaxRetries > 0 && retries >= c.Config.MaxRetries) {
+			return fmt.Errorf("failed to open socket after %d attempts: %w", retries+1, err)
+		}
+
+		retries++
+		if c.Logger != nil {
+			(*c.Logger).Log(fmt.Sprintf("Socket open failed: %v. Retrying in %v (Attempt %d/%d)...", err, c.Config.RetryInterval, retries, c.Config.MaxRetries))
+		}
+
+		time.Sleep(c.Config.RetryInterval)
+	}
+}
+
+func (c *SocketClient) attemptOpen() error {
 	// 1. Create Transport & Connect
 	var conn interfaces.TransportConnection
 	var err error
@@ -60,7 +83,6 @@ func (c *SocketClient) Open() error {
 	case interfaces.TransportFramedTCP:
 		conn, err = transports.Connect(c.Profile.GetAddress(), idleTimeout)
 	case interfaces.TransportShm:
-		// For SHM, we use Name as the identifier/path
 		conn, err = transports.ConnectShm(c.Profile.GetName(), idleTimeout)
 	case interfaces.TransportUDP:
 		conn, err = transports.ConnectUDP(c.Profile.GetAddress(), idleTimeout)
@@ -73,21 +95,11 @@ func (c *SocketClient) Open() error {
 	}
 
 	// 2. Encapsulation / Handshake Logic
-	// Case A: UDP + Hello (Stateless Envelope)
 	if c.Profile.GetTransport() == interfaces.TransportUDP &&
 		c.Profile.GetProtocol() == interfaces.ProtocolHello {
-
-		// Wrap connection to handle Per-Packet Encapsulation
 		conn = NewEnvelopedConnection(conn, c.Profile, c.Config)
-
-		// No initial handshake packet sent here.
-		// The first Send() will carry the identity.
-
 	} else if c.Profile.GetProtocol() != "" && c.Profile.GetProtocol() != interfaces.ProtocolNone {
-		// Case B: Connection-Oriented (TCP/SHM) + Hello
-		// Perform Standard Handshake
 		proto := protocols.NewHelloProtocol()
-
 		if err := proto.Initiate(conn, c.Profile, c.Config); err != nil {
 			conn.Close()
 			return err
@@ -95,34 +107,26 @@ func (c *SocketClient) Open() error {
 	}
 
 	// 3. Heartbeat Optimization & Safety Ratio
-	if c.Config.HeartbeatInterval == 0 {
-		// Calculate optimal heartbeat (IdleTimeout / 2.5)
+	heartbeatInterval := c.Config.HeartbeatInterval
+	if heartbeatInterval == 0 {
 		heartbeat := time.Duration(float64(idleTimeout) / 2.5)
-
-		// Threshold Check (Network: 300ms, Local: 150ms, SHM: 50ms)
-		threshold := 300 * time.Millisecond // Default (Networking)
+		threshold := 300 * time.Millisecond
 		addr := c.Profile.GetAddress()
 		isLocal := strings.Contains(addr, "127.0.0.1") || strings.Contains(addr, "localhost")
 		isShm := c.Profile.GetTransport() == interfaces.TransportShm
 
-		transportName := "networking"
 		if isShm {
 			threshold = 50 * time.Millisecond
-			transportName = "shared memory"
 		} else if isLocal {
 			threshold = 150 * time.Millisecond
-			transportName = "local"
 		}
 
-		if idleTimeout < threshold {
-			fmt.Printf("Heartbeat disabled: IdleTimeout (%dms) is below the threshold for %s transport. Connection will close if inactive.\n", idleTimeout.Milliseconds(), transportName)
-		} else {
-			c.Config.HeartbeatInterval = heartbeat
+		if idleTimeout >= threshold {
+			heartbeatInterval = heartbeat
 		}
 	}
 
-	c.transport = NewHeartbeatConnection(conn, c.Config.HeartbeatInterval)
-
+	c.transport = NewHeartbeatConnection(conn, heartbeatInterval)
 	return nil
 }
 

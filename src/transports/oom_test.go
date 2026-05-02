@@ -38,9 +38,9 @@ func TestOOMProtection(t *testing.T) {
 	}
 	defer client.Close()
 
-	// Send 20MB length (Max is 16MB)
+	// Send 70MB length (Max is 64MB)
 	header := make([]byte, 4)
-	binary.BigEndian.PutUint32(header, 20*1024*1024)
+	binary.BigEndian.PutUint32(header, 70*1024*1024)
 	_, _ = client.Write(header)
 
 	// 4. Verify the server dropped the connection

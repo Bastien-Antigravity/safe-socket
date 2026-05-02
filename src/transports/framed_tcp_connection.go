@@ -8,8 +8,8 @@ import (
 	"time"
 )
 
-// MaxPayloadSize defines the upper limit for incoming frames (default 16MB).
-const MaxPayloadSize = 16 * 1024 * 1024
+// MaxPayloadSize defines the upper limit for incoming frames (default 64MB).
+const MaxPayloadSize = 64 * 1024 * 1024
 
 // FramedTCPSocket implements interfaces.TransportConnection.
 // It uses a 4-byte BigEndian length header for every write.
