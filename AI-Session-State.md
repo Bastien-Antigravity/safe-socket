@@ -2,6 +2,14 @@
 microservice: safe-socket
 type: session-state
 status: active
+lifecycle:
+  active_branch: develop
+  protected_branches: [main, master]
+  current_version: 1.9.0
+  version_source: VERSION.txt
+done_when:
+  - parity_verified: false
+  - decision_log_updated: false
 directives:
   - autonomous-doc-sync: mandatory
   - obsidian-brain-sync: mandatory
