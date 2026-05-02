@@ -27,6 +27,6 @@ jobs:
       - name: Run golangci-lint
         run: $(go env GOPATH)/bin/golangci-lint run
       - name: Upload coverage
-        uses: codecov/codecov-action@v4    # optional, remove if you don't use Codecov
+        uses: codecov/codecov-action@v6    # optional, remove if you don't use Codecov
         with:
           file: coverage.out
