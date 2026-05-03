@@ -31,6 +31,18 @@ go get github.com/Bastien-Antigravity/safe-socket
 -   **Unified Facade**: Interact with any transport using `Open()`, `Close()`, `Send()`, `Receive()`, and `Accept()`.
 -   **Aggressive Responsiveness**: Optimized for high-frequency microservice environments with extremely tight default timeouts (500ms network / 100ms SHM) and an active activity-refresh deadline model.
 
+## 🛡️ Feature Specs & Governance (BDD)
+The behavior of this microservice is governed by strict specifications in the **[[business-bdd-brain|Business-Specs Brain]]**:
+- **Connection Lifecycle**: [[FEAT-000-Connection-Lifecycle|FEAT-000: State Transitions]]
+- **Establishment**: [[FEAT-001-Connection-Establishment|FEAT-001: Connection Management]]
+- **Framing Protocol**: [[FEAT-002-Framing-Protocol|FEAT-002: Length-Prefixed Framing]]
+- **Deadline Management**: [[FEAT-003-Deadline-Management|FEAT-003: Adaptive Timeouts]]
+- **Identity Handshake**: [[FEAT-004-Identity-Handshake|FEAT-004: Mutual Authentication]]
+- **Shared Memory**: [[FEAT-005-Shared-Memory-Transport|FEAT-005: Ultra-low Latency IPC]]
+- **Graceful Shutdown**: [[FEAT-006-Graceful-Shutdown|FEAT-006: Safe Termination]]
+- **Reconnection Strategy**: [[FEAT-007-Reconnection-Strategy|FEAT-007: Automatic Recovery]]
+- **Resource Boundaries**: [[FEAT-008-Resource-Boundaries|FEAT-008: Memory Isolation]]
+
 ## Usage
 
 ### Zero-Boilerplate Creation
