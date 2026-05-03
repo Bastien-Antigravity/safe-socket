@@ -1,18 +1,12 @@
-name: Build Python Wheels
+name: Master Release (Go + Python)
 
 on:
   push:
-    branches: [main, develop]
     tags: ['v*']
-  pull_request:
-    branches: [main]
-
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true 
 
 jobs:
-  build_wheels:
-    name: Build wheels on ${{ matrix.os }}
+  build_artifacts:
+    name: Build Artifacts on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
