@@ -7,8 +7,8 @@ on:
     branches: [ develop, main ]
 
 jobs:
-  verify-go:
-    name: Go Core Verification
+  verify:
+    name: Full Fleet Verification (Go + Python)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,26 +25,23 @@ jobs:
           go install capnproto.org/go/capnp/v3/capnpc-go@latest
           echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
 
+      - name: Build Core & C-API
+        run: make build
+
       - name: Go Lint & Test
         run: |
           go fmt ./...
           go test -v -race ./...
 
-  verify-python:
-    name: Python Wrapper Verification
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           
-      - name: Python Lint & Test
+      - name: Python Verification
         run: |
           cd python
           pip install pytest
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          if [ -f pyproject.toml ]; then pip install .; fi
+          pip install .
           pytest
