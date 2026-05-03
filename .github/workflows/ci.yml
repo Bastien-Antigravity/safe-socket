@@ -16,7 +16,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.25'
           
       - name: Install Cap'n Proto
         run: |
@@ -28,7 +28,7 @@ jobs:
       - name: Go Lint & Test
         run: |
           go fmt ./...
-          go test -v ./...
+          go test -v -race ./...
 
   verify-python:
     name: Python Wrapper Verification
@@ -44,6 +44,7 @@ jobs:
       - name: Python Lint & Test
         run: |
           cd python
+          pip install pytest
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           if [ -f pyproject.toml ]; then pip install .; fi
           pytest
