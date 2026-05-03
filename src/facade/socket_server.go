@@ -24,6 +24,7 @@ type SocketServer struct {
 	listener interfaces.TransportListener
 	Logger   interfaces.Logger
 	wg       sync.WaitGroup
+	mu       sync.RWMutex
 }
 
 // -----------------------------------------------------------------------------
@@ -40,6 +41,9 @@ func NewSocketServer(p interfaces.SocketProfile, config models.SocketConfig) *So
 
 // Listen starts listening on the address specified by the profile.
 func (s *SocketServer) Listen() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if s.listener != nil {
 		return errors.New("server already listening")
 	}
@@ -72,12 +76,16 @@ func (s *SocketServer) Listen() error {
 
 // Accept accepts a new connection and performs the handshake if defined.
 func (s *SocketServer) Accept() (interfaces.TransportConnection, error) {
-	if s.listener == nil {
+	s.mu.RLock()
+	ln := s.listener
+	s.mu.RUnlock()
+
+	if ln == nil {
 		return nil, errors.New("server not listening")
 	}
 
 	// 1. Accept raw transport connection
-	conn, err := s.listener.Accept()
+	conn, err := ln.Accept()
 	if err != nil {
 		return nil, err
 	}
@@ -159,6 +167,9 @@ func (s *SocketServer) Accept() (interfaces.TransportConnection, error) {
 
 // GetAddr returns the listener's network address, if the server is listening.
 func (s *SocketServer) GetAddr() (string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	if s.listener == nil {
 		return "", errors.New("server not listening")
 	}
@@ -170,9 +181,13 @@ func (s *SocketServer) GetAddr() (string, error) {
 // Close stops the server and optionally waits for all active connections to finish.
 // Set Config.Deadline to a positive value to limit the wait time (not yet implemented for WG wait).
 func (s *SocketServer) Close() error {
-	if s.listener != nil {
-		err := s.listener.Close()
-		s.listener = nil
+	s.mu.Lock()
+	ln := s.listener
+	s.listener = nil
+	s.mu.Unlock()
+
+	if ln != nil {
+		err := ln.Close()
 
 		// Wait for active connections to finish
 		s.wg.Wait()

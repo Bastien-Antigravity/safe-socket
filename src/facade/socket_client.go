@@ -10,6 +10,7 @@ import (
 	"github.com/Bastien-Antigravity/safe-socket/src/models"
 	"github.com/Bastien-Antigravity/safe-socket/src/protocols"
 	"github.com/Bastien-Antigravity/safe-socket/src/transports"
+	"sync"
 )
 
 // SocketClient implements the interfaces.Socket interface for Client-side operations.
@@ -20,6 +21,7 @@ type SocketClient struct {
 	Config    models.SocketConfig
 	transport interfaces.TransportConnection
 	Logger    interfaces.Logger
+	mu        sync.RWMutex
 }
 
 // -----------------------------------------------------------------------------
@@ -36,9 +38,12 @@ func NewSocketClient(p interfaces.SocketProfile, c models.SocketConfig) *SocketC
 // Open establishes the connection using the configured transport and protocol.
 // If MaxRetries > 0, it will attempt reconnection on failure.
 func (c *SocketClient) Open() error {
+	c.mu.Lock()
 	if c.transport != nil {
+		c.mu.Unlock()
 		return errors.New("socket already open")
 	}
+	c.mu.Unlock()
 
 	retries := 0
 	for {
@@ -126,7 +131,9 @@ func (c *SocketClient) attemptOpen() error {
 		}
 	}
 
+	c.mu.Lock()
 	c.transport = NewHeartbeatConnection(conn, heartbeatInterval)
+	c.mu.Unlock()
 	return nil
 }
 
@@ -136,19 +143,27 @@ func (c *SocketClient) attemptOpen() error {
 
 // Send writes the raw data to the transport.
 func (c *SocketClient) Send(data []byte) error {
-	if c.transport == nil {
+	c.mu.RLock()
+	tr := c.transport
+	c.mu.RUnlock()
+
+	if tr == nil {
 		return errors.New("socket not open")
 	}
-	_, err := c.transport.Write(data)
+	_, err := tr.Write(data)
 	return err
 }
 
 // Write implements the io.Writer interface in logger.
 func (c *SocketClient) Write(data []byte) (int, error) {
-	if c.transport == nil {
+	c.mu.RLock()
+	tr := c.transport
+	c.mu.RUnlock()
+
+	if tr == nil {
 		return 0, errors.New("socket not open")
 	}
-	n, err := c.transport.Write(data)
+	n, err := tr.Write(data)
 	return n, err
 }
 
@@ -157,27 +172,38 @@ func (c *SocketClient) Write(data []byte) (int, error) {
 // Receive reads from the transport into a newly allocated buffer.
 // It returns the data read and any error encountered.
 func (c *SocketClient) Receive() ([]byte, error) {
-	if c.transport == nil {
+	c.mu.RLock()
+	tr := c.transport
+	c.mu.RUnlock()
+
+	if tr == nil {
 		return nil, errors.New("socket not open")
 	}
-	return c.transport.ReadMessage()
+	return tr.ReadMessage()
 }
 
 // Read reads from the transport into the provided buffer (io.Reader compliance).
 func (c *SocketClient) Read(p []byte) (int, error) {
-	if c.transport == nil {
+	c.mu.RLock()
+	tr := c.transport
+	c.mu.RUnlock()
+
+	if tr == nil {
 		return 0, errors.New("socket not open")
 	}
-	return c.transport.Read(p)
+	return tr.Read(p)
 }
 
 // -----------------------------------------------------------------------------
 
 func (c *SocketClient) Close() error {
-	if c.transport != nil {
-		err := c.transport.Close()
-		c.transport = nil
-		return err
+	c.mu.Lock()
+	tr := c.transport
+	c.transport = nil
+	c.mu.Unlock()
+
+	if tr != nil {
+		return tr.Close()
 	}
 	return nil
 }
@@ -186,39 +212,55 @@ func (c *SocketClient) Close() error {
 
 // SetDeadline sets the read and write deadlines associated with the connection.
 func (c *SocketClient) SetDeadline(t time.Time) error {
-	if c.transport == nil {
+	c.mu.RLock()
+	tr := c.transport
+	c.mu.RUnlock()
+
+	if tr == nil {
 		return errors.New("socket not open")
 	}
-	return c.transport.SetDeadline(t)
+	return tr.SetDeadline(t)
 }
 
 // -----------------------------------------------------------------------------
 
 // SetReadDeadline sets the deadline for future Read calls.
 func (c *SocketClient) SetReadDeadline(t time.Time) error {
-	if c.transport == nil {
+	c.mu.RLock()
+	tr := c.transport
+	c.mu.RUnlock()
+
+	if tr == nil {
 		return errors.New("socket not open")
 	}
-	return c.transport.SetReadDeadline(t)
+	return tr.SetReadDeadline(t)
 }
 
 // -----------------------------------------------------------------------------
 
 // SetWriteDeadline sets the deadline for future Write calls.
 func (c *SocketClient) SetWriteDeadline(t time.Time) error {
-	if c.transport == nil {
+	c.mu.RLock()
+	tr := c.transport
+	c.mu.RUnlock()
+
+	if tr == nil {
 		return errors.New("socket not open")
 	}
-	return c.transport.SetWriteDeadline(t)
+	return tr.SetWriteDeadline(t)
 }
 
 // -----------------------------------------------------------------------------
 
 // SetIdleTimeout updates the internal idle timeout and refreshes the current deadline.
 func (c *SocketClient) SetIdleTimeout(d time.Duration) error {
+	c.mu.Lock()
 	c.Config.Deadline = d
-	if c.transport != nil {
-		return c.transport.SetIdleTimeout(d)
+	tr := c.transport
+	c.mu.Unlock()
+
+	if tr != nil {
+		return tr.SetIdleTimeout(d)
 	}
 	return nil
 }
