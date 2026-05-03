@@ -19,7 +19,7 @@ type SocketClient struct {
 	Profile   interfaces.SocketProfile
 	Config    models.SocketConfig
 	transport interfaces.TransportConnection
-	Logger    *interfaces.Logger
+	Logger    interfaces.Logger
 }
 
 // -----------------------------------------------------------------------------
@@ -54,7 +54,7 @@ func (c *SocketClient) Open() error {
 
 		retries++
 		if c.Logger != nil {
-			(*c.Logger).Log(fmt.Sprintf("Socket open failed: %v. Retrying in %v (Attempt %d/%d)...", err, c.Config.RetryInterval, retries, c.Config.MaxRetries))
+			c.Logger.Warning(fmt.Sprintf("Socket open failed: %v. Retrying in %v (Attempt %d/%d)...", err, c.Config.RetryInterval, retries, c.Config.MaxRetries))
 		}
 
 		time.Sleep(c.Config.RetryInterval)
@@ -226,7 +226,7 @@ func (c *SocketClient) SetIdleTimeout(d time.Duration) error {
 // -----------------------------------------------------------------------------
 
 // Bind logger to safe-socket
-func (c *SocketClient) SetLogger(logger *interfaces.Logger) {
+func (c *SocketClient) SetLogger(logger interfaces.Logger) {
 	c.Logger = logger
 }
 

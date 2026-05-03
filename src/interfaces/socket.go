@@ -22,7 +22,7 @@ const (
 type Socket interface {
 	// Common
 	Close() error
-	SetLogger(logger *Logger)
+	SetLogger(logger Logger)
 
 	// Client Methods
 	Open() error

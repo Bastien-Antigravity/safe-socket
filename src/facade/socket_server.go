@@ -22,7 +22,7 @@ type SocketServer struct {
 	Profile  interfaces.SocketProfile
 	Config   models.SocketConfig
 	listener interfaces.TransportListener
-	Logger   *interfaces.Logger
+	Logger   interfaces.Logger
 	wg       sync.WaitGroup
 }
 
@@ -201,7 +201,7 @@ func (c *trackingConnection) Close() error {
 // -----------------------------------------------------------------------------
 
 // Bind logger to safe-socket
-func (s *SocketServer) SetLogger(logger *interfaces.Logger) {
+func (s *SocketServer) SetLogger(logger interfaces.Logger) {
 	s.Logger = logger
 }
 
