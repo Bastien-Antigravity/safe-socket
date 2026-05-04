@@ -1,4 +1,3 @@
-// CI/CD Trigger Test
 package safesocket
 
 import (
