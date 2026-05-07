@@ -1,3 +1,9 @@
+---
+microservice: safe-socket
+type: governance
+status: active
+---
+
 # ⚡ AI Initialization: safe-socket
 
 > [!IMPORTANT] MANDATORY INITIALIZATION
