@@ -1,11 +1,80 @@
-name: Fleet CI
+name: Polyglot CI
+
 on:
   push:
-    branches: [ develop, main ]
+    branches: [develop, main]
   pull_request:
-    branches: [ develop, main ]
+    branches: [main]
+
+env:
+  GOTOOLCHAIN: auto
 
 jobs:
-  fleet-ci:
-    uses: Bastien-Antigravity/fleet-operation-brain/.github/workflows/master-ci.yml@develop
-    secrets: inherit
+  go-ci:
+    name: Go Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Run Go Tests
+        run: |
+          go mod tidy
+          go test -v ./...
+
+      - name: Install golangci-lint
+        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.61.0
+
+      - name: Run golangci-lint
+        run: $(go env GOPATH)/bin/golangci-lint run
+
+  python-ci:
+    name: Python Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Test Python SDK
+        working-directory: python
+        run: |
+          pip install pytest
+          if [ -f setup.py ]; then python setup.py build_go; fi
+          pip install -e .
+          pytest
+
+  rust-ci:
+    name: Rust Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.91
+
+      - name: Test Rust SDK
+        working-directory: rust
+        run: cargo test
