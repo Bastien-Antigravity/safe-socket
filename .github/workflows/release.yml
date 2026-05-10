@@ -1,4 +1,4 @@
-name: Master Release (Go + Python)
+name: Polyglot Release
 
 on:
   push:
@@ -25,21 +25,23 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Build Shared Library
-        run: make build
-
-      - name: Install build dependencies
-        run: python -m pip install --upgrade pip build setuptools wheel
-
-      - name: Build Wheel
+      - name: Build Shared Libraries
         run: |
-          cd python
-          python -m build
+          if grep -q "^build-all:" Makefile; then make build-all; elif grep -q "^build:" Makefile; then make build; fi
 
-      - name: Copy Shared Library to dist
-        # Copy the raw library to the dist folder so it can be uploaded and released
+      - name: Package Python SDK
         run: |
-          cp python/safesocket/safe_socket.* python/dist/
+          # Find all directories containing requirements.txt (excluding hidden ones)
+          PYTHON_DIRS=$(find . -maxdepth 3 -name "requirements.txt" -not -path "*/.*" -exec dirname {} \;)
+          for dir in $PYTHON_DIRS; do
+            if [ -f "$dir/setup.py" ] || [ -f "$dir/pyproject.toml" ]; then
+              echo "--- Packaging Python SDK in $dir ---"
+              cd "$dir"
+              python -m pip install --upgrade pip build setuptools wheel
+              python -m build
+              cd - > /dev/null
+            fi
+          done
         shell: bash
 
       - name: Upload artifacts
@@ -47,11 +49,14 @@ jobs:
         with:
           name: artifacts-${{ matrix.os }}
           path: |
-            python/dist/*.whl
-            python/dist/safe_socket.*
+            **/dist/*.whl
+            **/dist/*.tar.gz
+            **/lib*/*.so
+            **/lib*/*.dll
+            **/lib*/*.dylib
 
   release:
-    name: Create Release
+    name: Create GitHub Release
     needs: build_artifacts
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
@@ -61,6 +66,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Download all artifacts
+          # Use merge-multiple to get all OS builds into one folder
         uses: actions/download-artifact@v4
         with:
           path: dist
@@ -70,8 +76,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/*.whl
-            dist/safe_socket.*
+            dist/**/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
