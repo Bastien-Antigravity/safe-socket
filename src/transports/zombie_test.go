@@ -31,10 +31,10 @@ func TestZombieDetection(t *testing.T) {
 			t.Fatal(err)
 		}
 		sock := NewFramedTCPSocket(clientConn, 500*time.Millisecond)
-		
+
 		buf := make([]byte, 1024)
 		_, err = sock.Read(buf)
-		
+
 		if err == nil {
 			t.Error("Expected error on silent zombie, got nil")
 		} else if !strings.Contains(err.Error(), "timeout") {
@@ -62,7 +62,7 @@ func TestZombieDetection(t *testing.T) {
 			t.Fatal(err)
 		}
 		sock := NewFramedTCPSocket(clientConn, 0)
-		
+
 		done := make(chan bool, 1)
 		go func() {
 			buf := make([]byte, 1024)
@@ -82,7 +82,7 @@ func TestZombieDetection(t *testing.T) {
 	t.Run("SHM_Forever_Wait", func(t *testing.T) {
 		tempName := "shm_forever_test_final.tmp"
 		_ = os.Remove(tempName)
-		
+
 		f, err := os.Create(tempName)
 		if err != nil {
 			t.Fatal(err)
@@ -94,7 +94,7 @@ func TestZombieDetection(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		
+
 		m, err := mmap.Map(f2, mmap.RDWR, 0)
 		if err != nil {
 			f2.Close()
@@ -120,7 +120,7 @@ func TestZombieDetection(t *testing.T) {
 			// Wait for the reader goroutine to actually exit before we delete the file
 			<-done
 		}
-		
+
 		f2.Close()
 		time.Sleep(50 * time.Millisecond) // Final OS cleanup breather
 		_ = os.Remove(tempName)

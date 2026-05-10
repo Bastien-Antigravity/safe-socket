@@ -27,7 +27,7 @@ func TestForeverTimeoutParity(t *testing.T) {
 		clientConn, _ := net.Dial("tcp", ln.Addr().String())
 		clientSock := NewFramedTCPSocket(clientConn, 0)
 		time.Sleep(400 * time.Millisecond)
-		
+
 		_, err = clientSock.Write([]byte("hello"))
 		if err != nil {
 			t.Errorf("TCP should not timeout after SetIdleTimeout(0), got: %v", err)
@@ -51,7 +51,7 @@ func TestForeverTimeoutParity(t *testing.T) {
 		clientConn, _ := net.DialUDP("udp", nil, serverConn.LocalAddr().(*net.UDPAddr))
 		clientSock := NewUdpSocket(clientConn, 0)
 		time.Sleep(400 * time.Millisecond)
-		
+
 		_, err := clientSock.Write([]byte("hello"))
 		if err != nil {
 			t.Errorf("UDP should not timeout after SetIdleTimeout(0), got: %v", err)

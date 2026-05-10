@@ -26,7 +26,7 @@ func TestDynamicHeartbeatRestart(t *testing.T) {
 
 	// Restart heartbeats
 	_ = h.SetIdleTimeout(500 * time.Millisecond)
-	
+
 	// If we reach here without panic or deadlock, the restart logic is healthy
 	_ = h.Close()
 }

@@ -14,9 +14,9 @@ type mockProfile struct {
 }
 
 func (m *mockProfile) GetTransport() interfaces.TransportType { return interfaces.TransportFramedTCP }
-func (m *mockProfile) GetAddress() string                   { return "127.0.0.1:0" }
-func (m *mockProfile) GetConnectTimeout() int               { return 1000 }
-func (m *mockProfile) GetProtocol() interfaces.ProtocolType { return interfaces.ProtocolNone }
+func (m *mockProfile) GetAddress() string                     { return "127.0.0.1:0" }
+func (m *mockProfile) GetConnectTimeout() int                 { return 1000 }
+func (m *mockProfile) GetProtocol() interfaces.ProtocolType   { return interfaces.ProtocolNone }
 
 func TestSynchronousShutdown(t *testing.T) {
 	profile := &mockProfile{}

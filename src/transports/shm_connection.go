@@ -277,7 +277,7 @@ func (t *ShmTransport) Close() error {
 	if t.closed.Swap(true) {
 		return nil // Already closed
 	}
-	
+
 	// Flush? MMap usually syncs periodically.
 	if err := t.MMap.Unmap(); err != nil {
 		_ = t.File.Close() // Best effort close file
