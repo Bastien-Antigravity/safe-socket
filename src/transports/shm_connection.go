@@ -127,15 +127,16 @@ func (t *ShmTransport) Write(p []byte) (n int, err error) {
 
 	// 1. Check available space
 	for {
+		if t.closed.Load() {
+			return 0, io.ErrClosedPipe
+		}
+
 		tail := atomic.LoadUint64(t.Tail) // Where we want to write
 		head := atomic.LoadUint64(t.Head) // Where consumer is
 
 		// Capacity check: Tail - Head < BufferDataSize
 		if tail-head+lenData > BufferDataSize {
 			// Full. Spin-wait.
-			if t.closed.Load() {
-				return 0, io.ErrClosedPipe
-			}
 			// OPTIMIZATION: Check deadline ONLY when blocked
 			if !t.writeDeadline.IsZero() && time.Now().After(t.writeDeadline) {
 				return 0, os.ErrDeadlineExceeded
@@ -174,14 +175,15 @@ func (t *ShmTransport) Write(p []byte) (n int, err error) {
 func (t *ShmTransport) Read(p []byte) (n int, err error) {
 	// Blocking Read
 	for {
+		if t.closed.Load() {
+			return 0, io.EOF
+		}
+
 		tail := atomic.LoadUint64(t.Tail)
 		head := atomic.LoadUint64(t.Head)
 
 		if head == tail {
 			// Empty. Spin-wait.
-			if t.closed.Load() {
-				return 0, io.EOF
-			}
 			// OPTIMIZATION: Check deadline ONLY when blocked
 			if !t.readDeadline.IsZero() && time.Now().After(t.readDeadline) {
 				return 0, os.ErrDeadlineExceeded
@@ -229,14 +231,15 @@ func (t *ShmTransport) Read(p []byte) (n int, err error) {
 func (t *ShmTransport) ReadMessage() ([]byte, error) {
 	// Blocking Read logic duplicated from Read() but with allocation
 	for {
+		if t.closed.Load() {
+			return nil, io.EOF
+		}
+
 		tail := atomic.LoadUint64(t.Tail)
 		head := atomic.LoadUint64(t.Head)
 
 		if head == tail {
 			// Empty. Spin-wait.
-			if t.closed.Load() {
-				return nil, io.EOF
-			}
 			// OPTIMIZATION: Check deadline ONLY when blocked
 			if !t.readDeadline.IsZero() && time.Now().After(t.readDeadline) {
 				return nil, os.ErrDeadlineExceeded
