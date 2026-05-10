@@ -380,5 +380,5 @@ func TestSHM_Creation(t *testing.T) {
 	if err := client.Open(); err != nil {
 		t.Fatalf("Failed to open SHM: %v", err)
 	}
-	client.Close()
+	_ = client.Close()
 }

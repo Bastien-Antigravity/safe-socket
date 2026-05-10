@@ -6,11 +6,12 @@ import (
 	"strings"
 	"time"
 
+	"sync"
+
 	"github.com/Bastien-Antigravity/safe-socket/src/interfaces"
 	"github.com/Bastien-Antigravity/safe-socket/src/models"
 	"github.com/Bastien-Antigravity/safe-socket/src/protocols"
 	"github.com/Bastien-Antigravity/safe-socket/src/transports"
-	"sync"
 )
 
 // SocketServer implements the interfaces.Socket interface for Server-side operations.
@@ -122,7 +123,7 @@ func (s *SocketServer) Accept() (interfaces.TransportConnection, error) {
 		// Note: The handshake itself will respect the Deadline set in 1b because it uses Read/Write on the conn.
 		helloMsg, err := proto.WaitInitiation(conn)
 		if err != nil {
-			conn.Close()
+			_ = conn.Close()
 			return nil, err
 		}
 

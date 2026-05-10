@@ -106,7 +106,7 @@ func (c *SocketClient) attemptOpen() error {
 	} else if c.Profile.GetProtocol() != "" && c.Profile.GetProtocol() != interfaces.ProtocolNone {
 		proto := protocols.NewHelloProtocol()
 		if err := proto.Initiate(conn, c.Profile, c.Config); err != nil {
-			conn.Close()
+			_ = conn.Close()
 			return err
 		}
 	}

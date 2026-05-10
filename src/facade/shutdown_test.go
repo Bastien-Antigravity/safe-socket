@@ -39,7 +39,7 @@ func TestSynchronousShutdown(t *testing.T) {
 			// Simulate work: don't close immediately
 			go func() {
 				time.Sleep(500 * time.Millisecond)
-				conn.Close()
+				_ = conn.Close()
 			}()
 		}
 	}()

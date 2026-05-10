@@ -34,10 +34,11 @@ func (h *HeartbeatConnection) start(interval time.Duration, stopChan chan struct
 	for {
 		select {
 		case <-ticker.C:
-			_, err := h.Write([]byte{})
+			//nolint:staticcheck // QF1008: Explicit selector preferred for clarity and future-proofing
+			_, err := h.TransportConnection.Write([]byte{})
 			if err != nil {
 				// FAIL-FAST: Close the connection if heartbeat fails.
-				_ = h.Close()
+				_ = h.TransportConnection.Close()
 				return
 			}
 		case <-stopChan:
