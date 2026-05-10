@@ -34,7 +34,7 @@ func (h *HeartbeatConnection) start(interval time.Duration, stopChan chan struct
 	for {
 		select {
 		case <-ticker.C:
-			_, err := h.TransportConnection.Write([]byte{})
+			_, err := h.Write([]byte{})
 			if err != nil {
 				// FAIL-FAST: Close the connection if heartbeat fails.
 				_ = h.Close()

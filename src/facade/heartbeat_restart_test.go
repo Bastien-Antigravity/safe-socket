@@ -10,10 +10,10 @@ import (
 
 func TestDynamicHeartbeatRestart(t *testing.T) {
 	ln, _ := net.Listen("tcp", "127.0.0.1:0")
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 
 	clientConn, _ := net.Dial("tcp", ln.Addr().String())
-	defer clientConn.Close()
+	defer func() { _ = clientConn.Close() }()
 
 	// Start with heartbeats enabled
 	sock := transports.NewFramedTCPSocket(clientConn, 1*time.Second)

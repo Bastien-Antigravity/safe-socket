@@ -16,7 +16,7 @@ func TestZombieDetection(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer ln.Close()
+		defer func() { _ = ln.Close() }()
 
 		go func() {
 			conn, _ := ln.Accept()
@@ -47,7 +47,7 @@ func TestZombieDetection(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer ln.Close()
+		defer func() { _ = ln.Close() }()
 
 		go func() {
 			conn, _ := ln.Accept()
@@ -88,7 +88,7 @@ func TestZombieDetection(t *testing.T) {
 			t.Fatal(err)
 		}
 		_ = f.Truncate(int64(TotalSize))
-		f.Close()
+		_ = f.Close()
 
 		f2, err := os.OpenFile(tempName, os.O_RDWR, 0666)
 		if err != nil {
@@ -97,7 +97,7 @@ func TestZombieDetection(t *testing.T) {
 
 		m, err := mmap.Map(f2, mmap.RDWR, 0)
 		if err != nil {
-			f2.Close()
+			_ = f2.Close()
 			t.Fatal(err)
 		}
 
@@ -121,7 +121,7 @@ func TestZombieDetection(t *testing.T) {
 			<-done
 		}
 
-		f2.Close()
+		_ = f2.Close()
 		time.Sleep(50 * time.Millisecond) // Final OS cleanup breather
 		_ = os.Remove(tempName)
 	})

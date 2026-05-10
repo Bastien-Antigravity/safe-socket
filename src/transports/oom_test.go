@@ -14,7 +14,7 @@ func TestOOMProtection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 	actualAddr := ln.Addr().String()
 
 	// 2. Accept loop in background
@@ -24,7 +24,7 @@ func TestOOMProtection(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		socket := NewFramedTCPSocket(conn, 1*time.Second)
 		_, err = socket.ReadMessage()
@@ -36,7 +36,7 @@ func TestOOMProtection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// Send 70MB length (Max is 64MB)
 	header := make([]byte, 4)

@@ -42,7 +42,7 @@ func TestGetIdentity(t *testing.T) {
 
 	// 2. Heartbeat -> Handshake Wrapper
 	hb := facade.NewHeartbeatConnection(hc, 0)
-	defer hb.Close()
+	defer func() { _ = hb.Close() }()
 
 	result = safesocket.GetIdentity(hb)
 	if result != identity {

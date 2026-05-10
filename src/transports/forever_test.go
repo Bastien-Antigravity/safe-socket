@@ -12,7 +12,7 @@ func TestForeverTimeoutParity(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer ln.Close()
+		defer func() { _ = ln.Close() }()
 
 		go func() {
 			conn, _ := ln.Accept()
@@ -38,7 +38,7 @@ func TestForeverTimeoutParity(t *testing.T) {
 	t.Run("UDP_Forever", func(t *testing.T) {
 		addr, _ := net.ResolveUDPAddr("udp", "127.0.0.1:0")
 		serverConn, _ := net.ListenUDP("udp", addr)
-		defer serverConn.Close()
+		defer func() { _ = serverConn.Close() }()
 
 		go func() {
 			sock := NewUdpSocket(serverConn, 100*time.Millisecond)

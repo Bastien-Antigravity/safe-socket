@@ -29,7 +29,7 @@ func TestServerConfigDeadline(t *testing.T) {
 	if err := server.Listen(); err != nil {
 		t.Fatalf("Failed to listen: %v", err)
 	}
-	defer server.Close()
+	defer func() { _ = server.Close() }()
 
 	errChan := make(chan error, 1)
 	go func() {
@@ -38,7 +38,7 @@ func TestServerConfigDeadline(t *testing.T) {
 			errChan <- fmt.Errorf("Accept failed: %v", err)
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		// Attempt to read. Should timeout because client will sleep.
 		buf := make([]byte, 1024)
@@ -64,7 +64,7 @@ func TestServerConfigDeadline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// 3. Client Sleeps longer than Server Deadline (800ms > 200ms)
 	// Increased to 800ms for stability under -race flag
@@ -89,11 +89,11 @@ func TestClientDynamicDeadline(t *testing.T) {
 	// 1. Setup Server (Explicit 1s deadline to allow for the 500ms test sleep)
 	config := models.SocketConfig{Deadline: 1 * time.Second}
 	server, _ := factory.CreateWithConfig("tcp", addr, config, "server", true)
-	defer server.Close()
+	defer func() { _ = server.Close() }()
 
 	go func() {
 		conn, _ := server.Accept()
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 		// Wait 500ms then send
 		time.Sleep(500 * time.Millisecond)
 		_, _ = conn.Write([]byte("LATE_RESPONSE"))
@@ -101,7 +101,7 @@ func TestClientDynamicDeadline(t *testing.T) {
 
 	// 2. Setup Client
 	client, _ := factory.Create("tcp", addr, "", "client", true)
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// 3. Set Short Deadline (200ms)
 	if err := client.SetReadDeadline(time.Now().Add(200 * time.Millisecond)); err != nil {
@@ -154,12 +154,12 @@ func TestIdleTimeoutRefresh(t *testing.T) {
 
 	server, _ := factory.CreateSocket(profile, config, "server")
 	_ = server.Listen()
-	defer server.Close()
+	defer func() { _ = server.Close() }()
 
 	done := make(chan struct{})
 	go func() {
 		conn, _ := server.Accept()
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		// Wait 250ms (before timeout), then Read
 		time.Sleep(250 * time.Millisecond)
@@ -183,7 +183,7 @@ func TestIdleTimeoutRefresh(t *testing.T) {
 
 	// 2. Setup Client
 	client, _ := factory.Create("tcp", addr, "", "client", true)
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// 3. Send PINGs to keep it alive
 	_ = client.Send([]byte("PING1"))

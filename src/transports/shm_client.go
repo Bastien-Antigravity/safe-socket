@@ -21,14 +21,14 @@ func ConnectShm(path string, timeout time.Duration) (interfaces.TransportConnect
 
 	info, err := file.Stat()
 	if err != nil {
-		file.Close()
+		_ = file.Close()
 		return nil, err
 	}
 
 	// Grow file if needed
 	if info.Size() < int64(TotalSize) {
 		if err := file.Truncate(int64(TotalSize)); err != nil {
-			file.Close()
+			_ = file.Close()
 			return nil, err
 		}
 	}
@@ -36,7 +36,7 @@ func ConnectShm(path string, timeout time.Duration) (interfaces.TransportConnect
 	// Map the file
 	m, err := mmap.Map(file, mmap.RDWR, 0)
 	if err != nil {
-		file.Close()
+		_ = file.Close()
 		return nil, err
 	}
 

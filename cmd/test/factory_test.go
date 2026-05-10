@@ -24,7 +24,7 @@ func TestTCP_Raw(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create TCP server: %v", err)
 	}
-	defer server.Close()
+	defer func() { _ = server.Close() }()
 
 	errChan := make(chan error, 1)
 	go func() {
@@ -34,7 +34,7 @@ func TestTCP_Raw(t *testing.T) {
 			errChan <- fmt.Errorf("Accept failed: %v", err)
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		// Read
 		buf := make([]byte, 1024)
@@ -64,7 +64,7 @@ func TestTCP_Raw(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create TCP client: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// 3. Exchange
 	if err := client.Send([]byte("TCP_PING")); err != nil {
@@ -100,7 +100,7 @@ func TestTCP_Raw_Write_Method(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create TCP server: %v", err)
 	}
-	defer server.Close()
+	defer func() { _ = server.Close() }()
 
 	errChan := make(chan error, 1)
 	go func() {
@@ -109,7 +109,7 @@ func TestTCP_Raw_Write_Method(t *testing.T) {
 			errChan <- fmt.Errorf("Accept failed: %v", err)
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		buf := make([]byte, 1024)
 		n, err := conn.Read(buf)
@@ -132,7 +132,7 @@ func TestTCP_Raw_Write_Method(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create TCP client: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// 3. Use the new Write method (which returns count and error)
 	if _, err := client.Write([]byte("WRITE_TEST")); err != nil {
@@ -159,7 +159,7 @@ func TestTCP_Hello(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create TCP Hello server: %v", err)
 	}
-	defer server.Close()
+	defer func() { _ = server.Close() }()
 
 	errChan := make(chan error, 1)
 	go func() {
@@ -169,7 +169,7 @@ func TestTCP_Hello(t *testing.T) {
 			errChan <- fmt.Errorf("Accept failed (Handshake error?): %v", err)
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		// Verify Identity Access (Unwrap Heartbeat if present)
 		inner := conn
@@ -202,7 +202,7 @@ func TestTCP_Hello(t *testing.T) {
 	if err := client.Open(); err != nil {
 		t.Fatalf("Client Open (Handshake) failed: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// 3. Send Data
 	if err := client.Send([]byte("HELLO_TCP")); err != nil {
@@ -233,7 +233,7 @@ func TestUDP_Raw(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create UDP server: %v", err)
 	}
-	defer server.Close()
+	defer func() { _ = server.Close() }()
 
 	errChan := make(chan error, 1)
 	go func() {
@@ -270,7 +270,7 @@ func TestUDP_Raw(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create UDP client: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	if err := client.Send([]byte("UDP_PING")); err != nil {
 		t.Fatalf("Client send failed: %v", err)
@@ -296,7 +296,7 @@ func TestUDP_Hello(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create UDP Hello server: %v", err)
 	}
-	defer server.Close()
+	defer func() { _ = server.Close() }()
 
 	errChan := make(chan error, 1)
 	go func() {
@@ -307,7 +307,7 @@ func TestUDP_Hello(t *testing.T) {
 			errChan <- fmt.Errorf("Accept failed: %v", err)
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		// Allow time for testing (Unwrap Heartbeat if present)
 		var env *facade.EnvelopedConnection
@@ -343,7 +343,7 @@ func TestUDP_Hello(t *testing.T) {
 	if err := client.Open(); err != nil {
 		t.Fatalf("Client Open failed: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// 3. Send Data (triggers the Envelope + Send)
 	// Open() alone sends nothing for UDP-Hello now!
@@ -369,7 +369,7 @@ func TestUDP_Hello(t *testing.T) {
 // TestSHM_Creation Verifies we can create the SHM objects
 func TestSHM_Creation(t *testing.T) {
 	path := "test_shm_file"
-	defer os.Remove(path)
+	defer func() { _ = os.Remove(path) }()
 
 	// Only testing Client creation as Server side isn't implemented effectively for SHM yet
 	client, err := factory.Create("shm", path, "", "client", false)
