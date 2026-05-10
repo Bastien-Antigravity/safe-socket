@@ -1,4 +1,4 @@
-# [FLEET-ARCHITECT] Standardized Polyglot CI
+# [FLEET-ARCHITECT] Polyglot: Go+Python (Go:1.25, Py:3.12, Rust:1.91, C++:20)
 name: Polyglot CI
 
 on:
