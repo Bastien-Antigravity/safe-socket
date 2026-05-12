@@ -1,6 +1,7 @@
 package transports
 
 import (
+	"encoding/binary"
 	"io"
 	"net"
 	"os"
@@ -17,21 +18,50 @@ import (
 // [16-...] : Data Buffer
 
 const (
-	// Fixed Buffer Size: 64MB + 16 bytes header
-	// Using a power of 2 for easy wrapping (though modulo works too).
-	// Let's settle on a strict 64MB data payload.
-	BufferDataSize = 64 * 1024 * 1024 // 64 MB
-	MetaSize       = 16
-	TotalSize      = MetaSize + BufferDataSize
+	// Bidirectional: Two buffers of 32MB each
+	BufferDataSize = 32 * 1024 * 1024 // 32 MB per direction
+	MetaSize       = 128              // Header size
+	TotalSize      = MetaSize + (BufferDataSize * 2)
+)
+
+// Metadata Offsets
+const (
+	// Buffer A (Client -> Server)
+	OffsetHeadA = 0
+	OffsetTailA = 8
+	// Buffer B (Server -> Client)
+	OffsetHeadB = 16
+	OffsetTailB = 24
+
+	OffsetServerStatus = 32
+	OffsetClientStatus = 40
+	OffsetServerActivity = 48
+	OffsetClientActivity = 56
+)
+
+// Status Values
+const (
+	StatusIdle      = 0
+	StatusListening = 1
+	StatusConnected = 2
 )
 
 // ShmTransport implements a Shared Memory Ring Buffer transport.
 type ShmTransport struct {
 	File          *os.File
 	MMap          mmap.MMap
-	Head          *uint64 // Pointer to shared memory Head
-	Tail          *uint64 // Pointer to shared memory Tail
-	Data          []byte  // Slice pointing to shared data region
+	Role          string  // "client" or "server"
+	ProduceHead   *uint64 // Remote head (for capacity check)
+	ProduceTail   *uint64 // Local tail
+	ConsumeHead   *uint64 // Local head
+	ConsumeTail   *uint64 // Remote tail
+	ProduceData   []byte  // My write region
+	ConsumeData   []byte  // My read region
+	ServerStatus  *uint64
+	ClientStatus  *uint64
+	MyActivity      *uint64
+	PeerActivity    *uint64
+	lastObservedPeerActivity uint64
 	readDeadline  time.Time
 	writeDeadline time.Time
 	idleTimeout   time.Duration
@@ -40,31 +70,68 @@ type ShmTransport struct {
 
 // -----------------------------------------------------------------------------
 
-func NewShmTransport(f *os.File, m mmap.MMap, timeout time.Duration) *ShmTransport {
-	// Map the pointers directly to the byte slice
-	// Go slices are safe, but we need atomic access to the headers.
-	// Using unsafe to cast 8 bytes to *uint64.
+func NewShmTransport(f *os.File, m mmap.MMap, role string, timeout time.Duration) *ShmTransport {
+	srvStatus := (*uint64)(unsafe.Pointer(&m[OffsetServerStatus]))
+	cliStatus := (*uint64)(unsafe.Pointer(&m[OffsetClientStatus]))
+	srvActivity := (*uint64)(unsafe.Pointer(&m[OffsetServerActivity]))
+	cliActivity := (*uint64)(unsafe.Pointer(&m[OffsetClientActivity]))
 
-	// Pointers to the header in the MMap region
-	headerPtr := unsafe.Pointer(&m[0])
-	head := (*uint64)(headerPtr)
+	var pHead, pTail, cHead, cTail *uint64
+	var pData, cData []byte
+	var myActivity, peerActivity *uint64
 
-	tailPtr := unsafe.Pointer(&m[8])
-	tail := (*uint64)(tailPtr)
+	// Buffer A is [MetaSize : MetaSize + BufferDataSize]
+	// Buffer B is [MetaSize + BufferDataSize : TotalSize]
+	bufA := m[MetaSize : MetaSize+BufferDataSize]
+	bufB := m[MetaSize+BufferDataSize : TotalSize]
+
+	if role == "client" {
+		// Client writes to A, reads from B
+		pHead = (*uint64)(unsafe.Pointer(&m[OffsetHeadA]))
+		pTail = (*uint64)(unsafe.Pointer(&m[OffsetTailA]))
+		cHead = (*uint64)(unsafe.Pointer(&m[OffsetHeadB]))
+		cTail = (*uint64)(unsafe.Pointer(&m[OffsetTailB]))
+		pData = bufA
+		cData = bufB
+		myActivity = cliActivity
+		peerActivity = srvActivity
+	} else {
+		// Server writes to B, reads from A
+		pHead = (*uint64)(unsafe.Pointer(&m[OffsetHeadB]))
+		pTail = (*uint64)(unsafe.Pointer(&m[OffsetTailB]))
+		cHead = (*uint64)(unsafe.Pointer(&m[OffsetHeadA]))
+		cTail = (*uint64)(unsafe.Pointer(&m[OffsetTailA]))
+		pData = bufB
+		cData = bufA
+		myActivity = srvActivity
+		peerActivity = cliActivity
+	}
 
 	t := &ShmTransport{
-		File: f,
-		MMap: m,
-		Head: head,
-		Tail: tail,
-		Data: m[MetaSize:],
+		File:          f,
+		MMap:          m,
+		Role:          role,
+		ProduceHead:   pHead,
+		ProduceTail:   pTail,
+		ConsumeHead:   cHead,
+		ConsumeTail:   cTail,
+		ProduceData:   pData,
+		ConsumeData:   cData,
+		ServerStatus:  srvStatus,
+		ClientStatus:  cliStatus,
+		MyActivity:    myActivity,
+		PeerActivity:  peerActivity,
+		lastObservedPeerActivity: atomic.LoadUint64(peerActivity),
+		readDeadline:  time.Now().Add(timeout),
+		writeDeadline: time.Now().Add(timeout),
+		idleTimeout:   timeout,
 	}
 
-	if timeout > 0 {
-		t.idleTimeout = timeout
-		t.refreshReadDeadline()
-		t.refreshWriteDeadline()
+	if timeout == 0 {
+		t.readDeadline = time.Time{}
+		t.writeDeadline = time.Time{}
 	}
+
 	return t
 }
 
@@ -72,11 +139,17 @@ func (t *ShmTransport) refreshReadDeadline() {
 	if t.idleTimeout > 0 {
 		t.readDeadline = time.Now().Add(t.idleTimeout)
 	}
+	if t.MyActivity != nil {
+		atomic.StoreUint64(t.MyActivity, uint64(time.Now().UnixNano()))
+	}
 }
 
 func (t *ShmTransport) refreshWriteDeadline() {
 	if t.idleTimeout > 0 {
 		t.writeDeadline = time.Now().Add(t.idleTimeout)
+	}
+	if t.MyActivity != nil {
+		atomic.StoreUint64(t.MyActivity, uint64(time.Now().UnixNano()))
 	}
 }
 
@@ -118,54 +191,59 @@ func (t *ShmTransport) SetWriteDeadline(deadline time.Time) error {
 // -----------------------------------------------------------------------------
 
 // Write (Producer Role)
-// Writes data to the Ring Buffer.
 func (t *ShmTransport) Write(p []byte) (n int, err error) {
 	lenData := uint64(len(p))
-	if lenData > BufferDataSize {
-		return 0, io.ErrShortBuffer // Too big for entire buffer
+	// Framing: 4-byte header
+	totalLen := 4 + lenData
+
+	if totalLen > BufferDataSize {
+		return 0, io.ErrShortBuffer
 	}
 
-	// 1. Check available space
 	for {
 		if t.closed.Load() {
 			return 0, io.ErrClosedPipe
 		}
 
-		tail := atomic.LoadUint64(t.Tail) // Where we want to write
-		head := atomic.LoadUint64(t.Head) // Where consumer is
+		tail := atomic.LoadUint64(t.ProduceTail)
+		head := atomic.LoadUint64(t.ProduceHead)
 
-		// Capacity check: Tail - Head < BufferDataSize
-		if tail-head+lenData > BufferDataSize {
-			// Full. Spin-wait.
-			// OPTIMIZATION: Check deadline ONLY when blocked
+		if tail-head+totalLen > BufferDataSize {
 			if !t.writeDeadline.IsZero() && time.Now().After(t.writeDeadline) {
 				return 0, os.ErrDeadlineExceeded
 			}
-			time.Sleep(1 * time.Microsecond) // Polite spin
+			time.Sleep(1 * time.Microsecond)
 			continue
 		}
 
-		// 2. Write Data
-		// Handle wrapping if the write crosses the boundary
-		writeIdx := tail % BufferDataSize
+		// 1. Write Header (4 bytes, BigEndian)
+		header := make([]byte, 4)
+		binary.BigEndian.PutUint32(header, uint32(lenData))
+		t.writeToRing(tail, header)
 
-		if writeIdx+lenData <= BufferDataSize {
-			// Continuous write
-			copy(t.Data[writeIdx:], p)
-		} else {
-			// Split write
-			firstPart := BufferDataSize - writeIdx
-			copy(t.Data[writeIdx:], p[:firstPart])
-			copy(t.Data[0:], p[firstPart:])
+		// 2. Write Data
+		if lenData > 0 {
+			t.writeToRing(tail+4, p)
 		}
 
-		// 3. Commit: Update Tail
-		// Commit-Store ensure data is visible before index update (on x86 this is free, on ARM needs barrier)
-		// Go atomic.Store acts as a release barrier.
-		atomic.AddUint64(t.Tail, lenData)
+		atomic.AddUint64(t.ProduceTail, totalLen)
 		t.refreshWriteDeadline()
 
 		return int(lenData), nil
+	}
+}
+
+// writeToRing is a helper to handle wrapped writes.
+func (t *ShmTransport) writeToRing(offset uint64, p []byte) {
+	lenData := uint64(len(p))
+	writeIdx := offset % BufferDataSize
+
+	if writeIdx+lenData <= BufferDataSize {
+		copy(t.ProduceData[writeIdx:], p)
+	} else {
+		firstPart := BufferDataSize - writeIdx
+		copy(t.ProduceData[writeIdx:], p[:firstPart])
+		copy(t.ProduceData[0:], p[firstPart:])
 	}
 }
 
@@ -173,74 +251,96 @@ func (t *ShmTransport) Write(p []byte) (n int, err error) {
 
 // Read (Consumer Role)
 func (t *ShmTransport) Read(p []byte) (n int, err error) {
-	// Blocking Read
 	for {
 		if t.closed.Load() {
 			return 0, io.EOF
 		}
 
-		tail := atomic.LoadUint64(t.Tail)
-		head := atomic.LoadUint64(t.Head)
+		tail := atomic.LoadUint64(t.ConsumeTail)
+		head := atomic.LoadUint64(t.ConsumeHead)
 
-		if head == tail {
-			// Empty. Spin-wait.
-			// OPTIMIZATION: Check deadline ONLY when blocked
+		// Check if we have at least the 4-byte header
+		if tail-head < 4 {
+			// HEARTBEAT AUDIT FIX: Check if peer is active even without data
+			activity := atomic.LoadUint64(t.PeerActivity)
+			if activity > t.lastObservedPeerActivity {
+				t.refreshReadDeadline()
+				t.lastObservedPeerActivity = activity
+			}
+
 			if !t.readDeadline.IsZero() && time.Now().After(t.readDeadline) {
 				return 0, os.ErrDeadlineExceeded
 			}
-
 			time.Sleep(1 * time.Microsecond)
 			continue
 		}
 
-		// Calculate how much we can read
-		available := tail - head
-		lenBuf := uint64(len(p))
+		// 1. Read Header
+		header := make([]byte, 4)
+		t.readFromRing(head, header)
+		length := uint64(binary.BigEndian.Uint32(header))
 
-		// If needed, we frame-read.
-		// Actually, the interface says "Read(p)". Typical Socket behavior is to read what's available up to len(p).
-		toRead := available
-		if toRead > lenBuf {
-			toRead = lenBuf
+		// 2. Check if entire frame is available
+		if tail-head < 4+length {
+			// Frame incomplete, wait
+			time.Sleep(1 * time.Microsecond)
+			continue
 		}
 
-		readIdx := head % BufferDataSize
-
-		if readIdx+toRead <= BufferDataSize {
-			// Continuous read
-			copy(p, t.Data[readIdx:readIdx+toRead])
-		} else {
-			// Split read
-			firstPart := BufferDataSize - readIdx
-			copy(p, t.Data[readIdx:BufferDataSize])
-			copy(p[firstPart:], t.Data[0:toRead-firstPart])
+		// 3. Handle Heartbeats (Length 0)
+		if length == 0 {
+			atomic.AddUint64(t.ConsumeHead, 4)
+			continue
 		}
 
-		// Commit: Update Head
-		atomic.AddUint64(t.Head, toRead)
+		// 4. Read Body
+		if uint64(len(p)) < length {
+			return 0, io.ErrShortBuffer
+		}
+
+		t.readFromRing(head+4, p[:length])
+
+		atomic.AddUint64(t.ConsumeHead, 4+length)
 		t.refreshReadDeadline()
 
-		return int(toRead), nil
+		return int(length), nil
+	}
+}
+
+// readFromRing is a helper to handle wrapped reads.
+func (t *ShmTransport) readFromRing(offset uint64, p []byte) {
+	lenData := uint64(len(p))
+	readIdx := offset % BufferDataSize
+
+	if readIdx+lenData <= BufferDataSize {
+		copy(p, t.ConsumeData[readIdx:readIdx+lenData])
+	} else {
+		firstPart := BufferDataSize - readIdx
+		copy(p[:firstPart], t.ConsumeData[readIdx:])
+		copy(p[firstPart:], t.ConsumeData[:lenData-firstPart])
 	}
 }
 
 // -----------------------------------------------------------------------------
 
-// ReadMessage for SHM reads all available data or blocks until data arrives.
-// It acts as a "Frame Read" if the producer writes in frames, but technically it reads "everything available".
+// ReadMessage for SHM reads exactly one frame.
 func (t *ShmTransport) ReadMessage() ([]byte, error) {
-	// Blocking Read logic duplicated from Read() but with allocation
 	for {
 		if t.closed.Load() {
 			return nil, io.EOF
 		}
 
-		tail := atomic.LoadUint64(t.Tail)
-		head := atomic.LoadUint64(t.Head)
+		tail := atomic.LoadUint64(t.ConsumeTail)
+		head := atomic.LoadUint64(t.ConsumeHead)
 
-		if head == tail {
-			// Empty. Spin-wait.
-			// OPTIMIZATION: Check deadline ONLY when blocked
+		if tail-head < 4 {
+			// HEARTBEAT AUDIT FIX: Check if peer is active even without data
+			activity := atomic.LoadUint64(t.PeerActivity)
+			if activity > t.lastObservedPeerActivity {
+				t.refreshReadDeadline()
+				t.lastObservedPeerActivity = activity
+			}
+
 			if !t.readDeadline.IsZero() && time.Now().After(t.readDeadline) {
 				return nil, os.ErrDeadlineExceeded
 			}
@@ -248,27 +348,29 @@ func (t *ShmTransport) ReadMessage() ([]byte, error) {
 			continue
 		}
 
-		// Calculate how much we can read
-		available := tail - head
-		// We limit to a reasonable max if needed, but here we read all available
-		if available > BufferDataSize {
-			// Should strictly not happen unless overrun, but handle
-			available = BufferDataSize
+		// 1. Read Header
+		header := make([]byte, 4)
+		t.readFromRing(head, header)
+		length := uint64(binary.BigEndian.Uint32(header))
+
+		// 2. Check if entire frame is available
+		if tail-head < 4+length {
+			time.Sleep(1 * time.Microsecond)
+			continue
 		}
 
-		toRead := available
-		buf := make([]byte, toRead)
-
-		readIdx := head % BufferDataSize
-		if readIdx+toRead <= BufferDataSize {
-			copy(buf, t.Data[readIdx:readIdx+toRead])
-		} else {
-			firstPart := BufferDataSize - readIdx
-			copy(buf[:firstPart], t.Data[readIdx:])
-			copy(buf[firstPart:], t.Data[:toRead-firstPart])
+		// 3. Handle Heartbeats (Length 0)
+		if length == 0 {
+			atomic.AddUint64(t.ConsumeHead, 4)
+			continue
 		}
 
-		atomic.AddUint64(t.Head, toRead)
+		// 4. Allocate and Read Body
+		buf := make([]byte, length)
+		t.readFromRing(head+4, buf)
+
+		atomic.AddUint64(t.ConsumeHead, 4+length)
+		t.refreshReadDeadline()
 		return buf, nil
 	}
 }

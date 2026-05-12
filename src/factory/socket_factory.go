@@ -132,6 +132,29 @@ func createProfile(profileName, address string, st interfaces.SocketType, timeou
 		}
 		return profiles.NewTcpServerProfile(identity, address, timeout), nil
 
+	// TLS Support (Uses TCP transport with TLS config)
+	case "tls-hello":
+		if identity == "" {
+			if st == interfaces.SocketTypeClient {
+				identity = "TlsClient-Generic"
+			} else {
+				identity = "TlsServer-Generic"
+			}
+		}
+		if st == interfaces.SocketTypeClient {
+			return profiles.NewTlsHelloClientProfile(identity, address, timeout), nil
+		}
+		return profiles.NewTlsHelloServerProfile(identity, address, timeout), nil
+
+	case "tls":
+		if identity == "" {
+			identity = "TlsRaw-Generic"
+		}
+		if st == interfaces.SocketTypeClient {
+			return profiles.NewTlsClientProfile(identity, address, timeout), nil
+		}
+		return profiles.NewTlsServerProfile(identity, address, timeout), nil
+
 	// UDP Support
 	case "udp":
 		if identity == "" {

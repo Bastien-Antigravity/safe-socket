@@ -2,6 +2,7 @@ package transports
 
 import (
 	"os"
+	"sync/atomic"
 	"time"
 
 	"github.com/Bastien-Antigravity/safe-socket/src/interfaces"
@@ -40,5 +41,10 @@ func ConnectShm(path string, timeout time.Duration) (interfaces.TransportConnect
 		return nil, err
 	}
 
-	return NewShmTransport(file, m, timeout), nil
+	t := NewShmTransport(file, m, "client", timeout)
+
+	// Signal presence to listener
+	atomic.StoreUint64(t.ClientStatus, StatusConnected)
+
+	return t, nil
 }

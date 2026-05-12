@@ -29,4 +29,15 @@ type SocketConfig struct {
 
 	// RetryInterval is the time between reconnection attempts.
 	RetryInterval time.Duration
+
+	// Reliable enables the reliability layer for unreliable transports (UDP).
+	// When enabled, packets will include sequence numbers and expect ACKs.
+	Reliable bool
+
+	// TLS Configuration
+	CertFile           string
+	KeyFile            string
+	CAFile             string
+	ServerName         string
+	InsecureSkipVerify bool
 }

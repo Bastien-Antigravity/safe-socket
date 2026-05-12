@@ -55,12 +55,14 @@ func (s *SocketServer) Listen() error {
 	timeout := time.Duration(s.Profile.GetConnectTimeout()) * time.Millisecond
 
 	switch s.Profile.GetTransport() {
+	case interfaces.TransportTLS:
+		ln, err = transports.ListenTLS(s.Profile.GetAddress(), timeout, s.Config.CertFile, s.Config.KeyFile, s.Config.CAFile)
 	case interfaces.TransportFramedTCP:
 		ln, err = transports.Listen(s.Profile.GetAddress(), timeout)
 	case interfaces.TransportUDP:
 		ln, err = transports.ListenUDP(s.Profile.GetAddress(), timeout)
 	case interfaces.TransportShm:
-		return errors.New("SHM server listener not yet implemented")
+		ln, err = transports.ListenShm(s.Profile.GetAddress(), timeout)
 	default:
 		return errors.New("unsupported transport type for listening")
 	}
@@ -106,6 +108,11 @@ func (s *SocketServer) Accept() (interfaces.TransportConnection, error) {
 	}
 	_ = conn.SetIdleTimeout(idleTimeout)
 
+	// 1c. Apply Reliability Layer if requested (UDP only)
+	if s.Config.Reliable && s.Profile.GetTransport() == interfaces.TransportUDP {
+		conn = NewReliableConnection(conn)
+	}
+
 	// 2. Encapsulation / Handshake Logic
 	// Case A: UDP + Hello (Stateless Envelope)
 	if s.Profile.GetTransport() == interfaces.TransportUDP &&
@@ -132,36 +139,42 @@ func (s *SocketServer) Accept() (interfaces.TransportConnection, error) {
 	}
 
 	// 3. Heartbeat Optimization & Safety Ratio
-	if s.Config.HeartbeatInterval == 0 {
-		// Calculate optimal heartbeat (IdleTimeout / 2.5)
-		heartbeat := time.Duration(float64(idleTimeout) / 2.5)
-
-		// Threshold Check (Network: 300ms, Local: 150ms, SHM: 50ms)
-		threshold := 300 * time.Millisecond // Default (Networking)
-		addr := s.Profile.GetAddress()
-		isLocal := strings.Contains(addr, "127.0.0.1") || strings.Contains(addr, "localhost")
-		isShm := s.Profile.GetTransport() == interfaces.TransportShm
-
-		transportName := "networking"
-		if isShm {
-			threshold = 50 * time.Millisecond
-			transportName = "shared memory"
-		} else if isLocal {
-			threshold = 150 * time.Millisecond
-			transportName = "local"
+	heartbeatInterval := s.Config.HeartbeatInterval
+	if heartbeatInterval == 0 {
+		heartbeatInterval = time.Duration(float64(idleTimeout) / 2.5)
+	} else if idleTimeout > 0 && float64(heartbeatInterval)*2.5 > float64(idleTimeout) {
+		// If user provided an unsafe heartbeat (too close to deadline), adjust it
+		newHeartbeat := time.Duration(float64(idleTimeout) / 2.5)
+		if s.Logger != nil {
+			s.Logger.Warning(fmt.Sprintf("User HeartbeatInterval (%v) is too close to IdleTimeout (%v). Adjusting to safety ratio: %v",
+				heartbeatInterval, idleTimeout, newHeartbeat))
 		}
-
-		if idleTimeout < threshold {
-			fmt.Printf("Heartbeat disabled: IdleTimeout (%dms) is below the threshold for %s transport. Connection will close if inactive.\n", idleTimeout.Milliseconds(), transportName)
-			// Return a HeartbeatConnection with interval 0 (disabled)
-			return NewHeartbeatConnection(conn, 0), nil
-		} else {
-			// Effective heartbeat for this connection
-			return NewHeartbeatConnection(conn, heartbeat), nil
-		}
+		heartbeatInterval = newHeartbeat
 	}
 
-	return NewHeartbeatConnection(conn, s.Config.HeartbeatInterval), nil
+	// Threshold Check (Network: 300ms, Local: 150ms, SHM: 50ms)
+	threshold := 300 * time.Millisecond // Default (Networking)
+	addr := s.Profile.GetAddress()
+	isLocal := strings.Contains(addr, "127.0.0.1") || strings.Contains(addr, "localhost")
+	isShm := s.Profile.GetTransport() == interfaces.TransportShm
+
+	transportName := "networking"
+	if isShm {
+		threshold = 50 * time.Millisecond
+		transportName = "shared memory"
+	} else if isLocal {
+		threshold = 150 * time.Millisecond
+		transportName = "local"
+	}
+
+	if idleTimeout > 0 && idleTimeout < threshold {
+		if s.Logger != nil {
+			s.Logger.Info(fmt.Sprintf("Heartbeat disabled: IdleTimeout (%v) is below the threshold for %s transport.", idleTimeout, transportName))
+		}
+		return NewHeartbeatConnection(conn, 0), nil
+	}
+
+	return NewHeartbeatConnection(conn, heartbeatInterval), nil
 }
 
 // -----------------------------------------------------------------------------

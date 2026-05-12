@@ -85,6 +85,8 @@ func (c *SocketClient) attemptOpen() error {
 	}
 
 	switch c.Profile.GetTransport() {
+	case interfaces.TransportTLS:
+		conn, err = transports.ConnectTLS(c.Profile.GetAddress(), idleTimeout, c.Config.CertFile, c.Config.KeyFile, c.Config.CAFile, c.Config.ServerName, c.Config.InsecureSkipVerify)
 	case interfaces.TransportFramedTCP:
 		conn, err = transports.Connect(c.Profile.GetAddress(), idleTimeout)
 	case interfaces.TransportShm:
@@ -97,6 +99,11 @@ func (c *SocketClient) attemptOpen() error {
 
 	if err != nil {
 		return err
+	}
+
+	// 1b. Apply Reliability Layer if requested (UDP only)
+	if c.Config.Reliable && c.Profile.GetTransport() == interfaces.TransportUDP {
+		conn = NewReliableConnection(conn)
 	}
 
 	// 2. Encapsulation / Handshake Logic
@@ -114,21 +121,31 @@ func (c *SocketClient) attemptOpen() error {
 	// 3. Heartbeat Optimization & Safety Ratio
 	heartbeatInterval := c.Config.HeartbeatInterval
 	if heartbeatInterval == 0 {
-		heartbeat := time.Duration(float64(idleTimeout) / 2.5)
-		threshold := 300 * time.Millisecond
-		addr := c.Profile.GetAddress()
-		isLocal := strings.Contains(addr, "127.0.0.1") || strings.Contains(addr, "localhost")
-		isShm := c.Profile.GetTransport() == interfaces.TransportShm
-
-		if isShm {
-			threshold = 50 * time.Millisecond
-		} else if isLocal {
-			threshold = 150 * time.Millisecond
+		heartbeatInterval = time.Duration(float64(idleTimeout) / 2.5)
+	} else if idleTimeout > 0 && float64(heartbeatInterval)*2.5 > float64(idleTimeout) {
+		// If user provided an unsafe heartbeat (too close to deadline), adjust it
+		newHeartbeat := time.Duration(float64(idleTimeout) / 2.5)
+		if c.Logger != nil {
+			c.Logger.Warning(fmt.Sprintf("User HeartbeatInterval (%v) is too close to IdleTimeout (%v). Adjusting to safety ratio: %v",
+				heartbeatInterval, idleTimeout, newHeartbeat))
 		}
+		heartbeatInterval = newHeartbeat
+	}
 
-		if idleTimeout >= threshold {
-			heartbeatInterval = heartbeat
-		}
+	// Threshold Check (Network: 300ms, Local: 150ms, SHM: 50ms)
+	threshold := 300 * time.Millisecond
+	addr := c.Profile.GetAddress()
+	isLocal := strings.Contains(addr, "127.0.0.1") || strings.Contains(addr, "localhost")
+	isShm := c.Profile.GetTransport() == interfaces.TransportShm
+
+	if isShm {
+		threshold = 50 * time.Millisecond
+	} else if isLocal {
+		threshold = 150 * time.Millisecond
+	}
+
+	if idleTimeout > 0 && idleTimeout < threshold {
+		heartbeatInterval = 0 // Disabled
 	}
 
 	c.mu.Lock()

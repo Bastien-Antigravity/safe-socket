@@ -101,7 +101,7 @@ func TestZombieDetection(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		shmServer := NewShmTransport(f2, m, 100*time.Millisecond)
+		shmServer := NewShmTransport(f2, m, "server", 100*time.Millisecond)
 		_ = shmServer.SetIdleTimeout(0)
 
 		done := make(chan bool, 1)
