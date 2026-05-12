@@ -33,7 +33,7 @@ func TestStress_Concurrency(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to create server: %v", err)
 			}
-			defer server.Close()
+			defer func() { _ = server.Close() }()
 
 			var serverErrorCount int32
 			var serverMsgCount int32
@@ -45,7 +45,7 @@ func TestStress_Concurrency(t *testing.T) {
 						return // Server closed
 					}
 					go func() {
-						defer conn.Close()
+						defer func() { _ = conn.Close() }()
 						for i := 0; i < messagesPerClient; i++ {
 							msg, err := conn.ReadMessage()
 							if err != nil {
@@ -78,7 +78,7 @@ func TestStress_Concurrency(t *testing.T) {
 						atomic.AddInt32(&clientErrorCount, 1)
 						return
 					}
-					defer client.Close()
+					defer func() { _ = client.Close() }()
 
 					for j := 0; j < messagesPerClient; j++ {
 						payload := []byte(fmt.Sprintf("msg-%d-%d", id, j))
@@ -118,7 +118,7 @@ func TestStress_Concurrency(t *testing.T) {
 func TestStress_RapidReconnect(t *testing.T) {
 	addr := "127.0.0.1:9201"
 	server, _ := factory.Create("tcp", addr, "", "server", true)
-	defer server.Close()
+	defer func() { _ = server.Close() }()
 
 	go func() {
 		for {

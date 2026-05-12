@@ -25,7 +25,6 @@ type ReliableConnection struct {
 	interfaces.TransportConnection
 
 	nextSeq       uint64
-	lastSentAck   uint64
 	lastRemoteSeq uint64
 
 	unacked      map[uint64]*pendingPacket
