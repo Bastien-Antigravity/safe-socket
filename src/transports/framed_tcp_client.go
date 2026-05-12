@@ -76,4 +76,3 @@ func wrapTCP(conn net.Conn, timeout time.Duration) interfaces.TransportConnectio
 
 	return socket
 }
-

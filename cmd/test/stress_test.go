@@ -23,7 +23,7 @@ func TestStress_Concurrency(t *testing.T) {
 
 			if tr == "shm" {
 				addr = "stress_shm_file"
-				numClients = 1          // SHM is strictly 1-to-1 in current implementation
+				numClients = 1           // SHM is strictly 1-to-1 in current implementation
 				messagesPerClient = 1000 // Stress by volume instead of concurrency
 				defer func() { _ = os.Remove(addr) }()
 			}
@@ -59,7 +59,6 @@ func TestStress_Concurrency(t *testing.T) {
 				}
 			}()
 
-
 			// 2. Start Clients
 			var wg sync.WaitGroup
 			var clientErrorCount int32
@@ -70,7 +69,7 @@ func TestStress_Concurrency(t *testing.T) {
 				wg.Add(1)
 				go func(id int) {
 					defer wg.Done()
-					
+
 					// Slight jitter for connection establishment
 					time.Sleep(time.Duration(id%10) * time.Millisecond)
 
@@ -106,7 +105,7 @@ func TestStress_Concurrency(t *testing.T) {
 			if clientErrorCount > 0 {
 				t.Errorf("Transport %s had %d client errors", tr, clientErrorCount)
 			}
-			
+
 			expectedMsgs := int32(numClients * messagesPerClient)
 			if serverMsgCount != expectedMsgs {
 				t.Errorf("Expected %d total messages, got %d", expectedMsgs, serverMsgCount)

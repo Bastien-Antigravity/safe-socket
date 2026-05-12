@@ -440,7 +440,6 @@ func TestUDP_Reliable(t *testing.T) {
 	}
 }
 
-
 // TestSHM_FullExchange Verifies server/client exchange via SHM
 func TestSHM_FullExchange(t *testing.T) {
 	path := "test_shm_exchange"
@@ -641,5 +640,3 @@ func generateSelfSignedCert(certPath, keyPath string) error {
 
 	return nil
 }
-
-

@@ -11,7 +11,7 @@ from safesocket import safesocket
 def run_server():
     try:
         print("[Server] Creating socket...")
-        server = safesocket.create(profile="tcp", address="127.0.0.1:9999", socket_type="server")
+        server = safesocket.create(profile_name="tcp", address="127.0.0.1:9999", socket_type="server")
         print("[Server] Listening...")
         server.listen()
         
@@ -36,7 +36,7 @@ def run_client():
     try:
         time.sleep(1) # Wait for server to start
         print("[Client] Creating socket...")
-        client = safesocket.create(profile="tcp", address="127.0.0.1:9999", socket_type="client")
+        client = safesocket.create(profile_name="tcp", address="127.0.0.1:9999", socket_type="client")
         print("[Client] Opening...")
         client.open()
         

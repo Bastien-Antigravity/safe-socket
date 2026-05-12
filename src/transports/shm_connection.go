@@ -33,8 +33,8 @@ const (
 	OffsetHeadB = 16
 	OffsetTailB = 24
 
-	OffsetServerStatus = 32
-	OffsetClientStatus = 40
+	OffsetServerStatus   = 32
+	OffsetClientStatus   = 40
 	OffsetServerActivity = 48
 	OffsetClientActivity = 56
 )
@@ -48,24 +48,24 @@ const (
 
 // ShmTransport implements a Shared Memory Ring Buffer transport.
 type ShmTransport struct {
-	File          *os.File
-	MMap          mmap.MMap
-	Role          string  // "client" or "server"
-	ProduceHead   *uint64 // Remote head (for capacity check)
-	ProduceTail   *uint64 // Local tail
-	ConsumeHead   *uint64 // Local head
-	ConsumeTail   *uint64 // Remote tail
-	ProduceData   []byte  // My write region
-	ConsumeData   []byte  // My read region
-	ServerStatus  *uint64
-	ClientStatus  *uint64
-	MyActivity      *uint64
-	PeerActivity    *uint64
+	File                     *os.File
+	MMap                     mmap.MMap
+	Role                     string  // "client" or "server"
+	ProduceHead              *uint64 // Remote head (for capacity check)
+	ProduceTail              *uint64 // Local tail
+	ConsumeHead              *uint64 // Local head
+	ConsumeTail              *uint64 // Remote tail
+	ProduceData              []byte  // My write region
+	ConsumeData              []byte  // My read region
+	ServerStatus             *uint64
+	ClientStatus             *uint64
+	MyActivity               *uint64
+	PeerActivity             *uint64
 	lastObservedPeerActivity uint64
-	readDeadline  time.Time
-	writeDeadline time.Time
-	idleTimeout   time.Duration
-	closed        atomic.Bool
+	readDeadline             time.Time
+	writeDeadline            time.Time
+	idleTimeout              time.Duration
+	closed                   atomic.Bool
 }
 
 // -----------------------------------------------------------------------------
@@ -108,23 +108,23 @@ func NewShmTransport(f *os.File, m mmap.MMap, role string, timeout time.Duration
 	}
 
 	t := &ShmTransport{
-		File:          f,
-		MMap:          m,
-		Role:          role,
-		ProduceHead:   pHead,
-		ProduceTail:   pTail,
-		ConsumeHead:   cHead,
-		ConsumeTail:   cTail,
-		ProduceData:   pData,
-		ConsumeData:   cData,
-		ServerStatus:  srvStatus,
-		ClientStatus:  cliStatus,
-		MyActivity:    myActivity,
-		PeerActivity:  peerActivity,
+		File:                     f,
+		MMap:                     m,
+		Role:                     role,
+		ProduceHead:              pHead,
+		ProduceTail:              pTail,
+		ConsumeHead:              cHead,
+		ConsumeTail:              cTail,
+		ProduceData:              pData,
+		ConsumeData:              cData,
+		ServerStatus:             srvStatus,
+		ClientStatus:             cliStatus,
+		MyActivity:               myActivity,
+		PeerActivity:             peerActivity,
 		lastObservedPeerActivity: atomic.LoadUint64(peerActivity),
-		readDeadline:  time.Now().Add(timeout),
-		writeDeadline: time.Now().Add(timeout),
-		idleTimeout:   timeout,
+		readDeadline:             time.Now().Add(timeout),
+		writeDeadline:            time.Now().Add(timeout),
+		idleTimeout:              timeout,
 	}
 
 	if timeout == 0 {

@@ -23,26 +23,26 @@ const (
 // - Deduplication
 type ReliableConnection struct {
 	interfaces.TransportConnection
-	
-	nextSeq        uint64
-	lastSentAck    uint64
-	lastRemoteSeq  uint64
-	
-	unacked        map[uint64]*pendingPacket
-	receivedSeqs   map[uint64]time.Time // For deduplication
-	
-	mu             sync.Mutex
-	stopRetry      chan struct{}
-	closeOnce      sync.Once
-	
-	retryInterval  time.Duration
-	maxRetries     int
+
+	nextSeq       uint64
+	lastSentAck   uint64
+	lastRemoteSeq uint64
+
+	unacked      map[uint64]*pendingPacket
+	receivedSeqs map[uint64]time.Time // For deduplication
+
+	mu        sync.Mutex
+	stopRetry chan struct{}
+	closeOnce sync.Once
+
+	retryInterval time.Duration
+	maxRetries    int
 }
 
 type pendingPacket struct {
-	data      []byte
-	sentAt    time.Time
-	retries   int
+	data    []byte
+	sentAt  time.Time
+	retries int
 }
 
 // -----------------------------------------------------------------------------
@@ -125,7 +125,7 @@ func (c *ReliableConnection) Read(p []byte) (n int, err error) {
 			if remoteSeq > c.lastRemoteSeq {
 				c.lastRemoteSeq = remoteSeq
 			}
-			
+
 			// Deduplication
 			if _, exists := c.receivedSeqs[remoteSeq]; exists {
 				c.mu.Unlock()
@@ -179,7 +179,7 @@ func (c *ReliableConnection) sendAck(seq uint64) {
 	ackPacket[0] = RudpTypeAck
 	binary.BigEndian.PutUint64(ackPacket[1:9], 0)
 	binary.BigEndian.PutUint64(ackPacket[9:17], seq)
-	
+
 	_, _ = c.TransportConnection.Write(ackPacket)
 }
 
