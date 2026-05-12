@@ -64,3 +64,4 @@ To generate a coverage report:
 go test -coverprofile=coverage.out ./...
 go tool cover -html=coverage.out
 ```
+
