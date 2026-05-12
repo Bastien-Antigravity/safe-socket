@@ -122,8 +122,6 @@ func NewShmTransport(f *os.File, m mmap.MMap, role string, timeout time.Duration
 		MyActivity:               myActivity,
 		PeerActivity:             peerActivity,
 		lastObservedPeerActivity: atomic.LoadUint64(peerActivity),
-		readDeadline:             time.Now().Add(timeout),
-		writeDeadline:            time.Now().Add(timeout),
 		idleTimeout:              timeout,
 	}
 
