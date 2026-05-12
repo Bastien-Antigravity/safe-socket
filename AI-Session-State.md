@@ -25,6 +25,7 @@ directives:
 - [x] Initialized session state tracking for this repository.
 - [x] Synchronized with the Global Obsidian Brain.
 - [x] **v1.9.0 Stability**: Implemented "Infinite Wait" (0) logic across all transport layers.
+- [x] **CI Stabilization**: Standardized `golangci-lint` config with `version: "1"` and corrected workflow linter version to `v1.64.2`.
 - [x] **Polyglot Forever**: Updated C API and Python wrapper to support `set_idle_timeout(0)`.
 - [x] **Zombie Detection Verified**: Added unit tests for silent-peer detection and forever-wait persistence.
 
