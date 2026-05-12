@@ -107,7 +107,7 @@ func TestStress_Concurrency(t *testing.T) {
 			}
 
 			expectedMsgs := int32(numClients * messagesPerClient)
-			if serverMsgCount != expectedMsgs {
+			if atomic.LoadInt32(&serverMsgCount) != expectedMsgs {
 				t.Errorf("Expected %d total messages, got %d", expectedMsgs, serverMsgCount)
 			}
 		})

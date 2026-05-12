@@ -62,8 +62,8 @@ type ShmTransport struct {
 	MyActivity               *uint64
 	PeerActivity             *uint64
 	lastObservedPeerActivity uint64
-	readDeadline             time.Time
-	writeDeadline            time.Time
+	readDeadline             atomic.Int64
+	writeDeadline            atomic.Int64
 	idleTimeout              time.Duration
 	closed                   atomic.Bool
 }
@@ -127,9 +127,9 @@ func NewShmTransport(f *os.File, m mmap.MMap, role string, timeout time.Duration
 		idleTimeout:              timeout,
 	}
 
-	if timeout == 0 {
-		t.readDeadline = time.Time{}
-		t.writeDeadline = time.Time{}
+	if timeout > 0 {
+		t.readDeadline.Store(time.Now().Add(timeout).UnixNano())
+		t.writeDeadline.Store(time.Now().Add(timeout).UnixNano())
 	}
 
 	return t
@@ -137,7 +137,7 @@ func NewShmTransport(f *os.File, m mmap.MMap, role string, timeout time.Duration
 
 func (t *ShmTransport) refreshReadDeadline() {
 	if t.idleTimeout > 0 {
-		t.readDeadline = time.Now().Add(t.idleTimeout)
+		t.readDeadline.Store(time.Now().Add(t.idleTimeout).UnixNano())
 	}
 	if t.MyActivity != nil {
 		atomic.StoreUint64(t.MyActivity, uint64(time.Now().UnixNano()))
@@ -146,7 +146,7 @@ func (t *ShmTransport) refreshReadDeadline() {
 
 func (t *ShmTransport) refreshWriteDeadline() {
 	if t.idleTimeout > 0 {
-		t.writeDeadline = time.Now().Add(t.idleTimeout)
+		t.writeDeadline.Store(time.Now().Add(t.idleTimeout).UnixNano())
 	}
 	if t.MyActivity != nil {
 		atomic.StoreUint64(t.MyActivity, uint64(time.Now().UnixNano()))
@@ -157,8 +157,8 @@ func (t *ShmTransport) refreshWriteDeadline() {
 func (t *ShmTransport) SetIdleTimeout(d time.Duration) error {
 	t.idleTimeout = d
 	if d == 0 {
-		t.readDeadline = time.Time{}
-		t.writeDeadline = time.Time{}
+		t.readDeadline.Store(0)
+		t.writeDeadline.Store(0)
 	} else {
 		t.refreshReadDeadline()
 		t.refreshWriteDeadline()
@@ -169,22 +169,22 @@ func (t *ShmTransport) SetIdleTimeout(d time.Duration) error {
 // -----------------------------------------------------------------------------
 
 func (t *ShmTransport) SetDeadline(deadline time.Time) error {
-	t.readDeadline = deadline
-	t.writeDeadline = deadline
+	t.readDeadline.Store(deadline.UnixNano())
+	t.writeDeadline.Store(deadline.UnixNano())
 	return nil
 }
 
 // -----------------------------------------------------------------------------
 
 func (t *ShmTransport) SetReadDeadline(deadline time.Time) error {
-	t.readDeadline = deadline
+	t.readDeadline.Store(deadline.UnixNano())
 	return nil
 }
 
 // -----------------------------------------------------------------------------
 
 func (t *ShmTransport) SetWriteDeadline(deadline time.Time) error {
-	t.writeDeadline = deadline
+	t.writeDeadline.Store(deadline.UnixNano())
 	return nil
 }
 
@@ -209,7 +209,8 @@ func (t *ShmTransport) Write(p []byte) (n int, err error) {
 		head := atomic.LoadUint64(t.ProduceHead)
 
 		if tail-head+totalLen > BufferDataSize {
-			if !t.writeDeadline.IsZero() && time.Now().After(t.writeDeadline) {
+			wd := t.writeDeadline.Load()
+			if wd > 0 && time.Now().UnixNano() > wd {
 				return 0, os.ErrDeadlineExceeded
 			}
 			time.Sleep(1 * time.Microsecond)
@@ -268,7 +269,8 @@ func (t *ShmTransport) Read(p []byte) (n int, err error) {
 				t.lastObservedPeerActivity = activity
 			}
 
-			if !t.readDeadline.IsZero() && time.Now().After(t.readDeadline) {
+			rd := t.readDeadline.Load()
+			if rd > 0 && time.Now().UnixNano() > rd {
 				return 0, os.ErrDeadlineExceeded
 			}
 			time.Sleep(1 * time.Microsecond)
@@ -341,7 +343,8 @@ func (t *ShmTransport) ReadMessage() ([]byte, error) {
 				t.lastObservedPeerActivity = activity
 			}
 
-			if !t.readDeadline.IsZero() && time.Now().After(t.readDeadline) {
+			rd := t.readDeadline.Load()
+			if rd > 0 && time.Now().UnixNano() > rd {
 				return nil, os.ErrDeadlineExceeded
 			}
 			time.Sleep(1 * time.Microsecond)
