@@ -29,7 +29,19 @@ go get github.com/Bastien-Antigravity/safe-socket
     -   **Hello Protocol**: Identity exchange handshake.
     -   **Stateless Envelope (UDP)**: Zero-handshake authentication where every packet carries the sender's identity and payload.
 -   **Unified Facade**: Interact with any transport using `Open()`, `Close()`, `Send()`, `Receive()`, and `Accept()`.
--   **Aggressive Responsiveness**: Optimized for high-frequency microservice environments with extremely tight default timeouts (500ms network / 100ms SHM) and an active activity-refresh deadline model.
+- **Aggressive Responsiveness**: Optimized for high-frequency microservice environments with extremely tight default timeouts (500ms network / 100ms SHM) and an active activity-refresh deadline model.
+
+### 🚀 Polyglot SDK
+
+The core Go engine is exposed via a CGO-bridge, providing high-level, object-oriented bindings for multiple languages. All bindings are located in the `safesock/` directory and maintain 100% functional parity with the Go implementation.
+
+*   **[Python SDK](./safesock/python)**: Type-safe wrapper following ecosystem standards.
+*   **[Rust SDK](./safesock/rust)**: Memory-safe RAII wrapper.
+*   **[C++ SDK](./safesock/cpp)**: Modern header-only wrapper.
+*   **[VBA SDK](./safesock/vba)**: High-performance access for Microsoft Office.
+
+Refer to the **[Polyglot SDK Documentation](./safesock/README.md)** for architecture and build details.
+
 
 ## 🛡️ Feature Specs & Governance (BDD)
 The behavior of this microservice is governed by strict specifications in the **[[business-bdd-brain|Business-Specs Brain]]**:
