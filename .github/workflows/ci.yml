@@ -1,51 +1,15 @@
-# [FLEET-ARCHITECT] Polyglot: Go+Python+Rust+C++ (Go:1.25, Py:3.12, Rust:1.91, C++:20)
+# [FLEET-ARCHITECT] Microservice (Go:1.25, Py:3.12, Rust:1.91, C++:20)
 # Sync-ID: 2026-05-11-GLOBAL-001
-name: Polyglot CI
-
+name: Fleet CI
 on:
   push:
-    branches: [develop, main]
+    branches: [ develop, main ]
   pull_request:
-    branches: [main]
-
-env:
-  GOTOOLCHAIN: auto
+    branches: [ develop, main ]
 
 jobs:
   go-ci:
     uses: Bastien-Antigravity/fleet-operation-brain/.github/workflows/workflow-go.yml@develop
     with:
       working_directory: '.'
-      go_version: '1.25'
-      artifact_name: 'libsafesocket'
-      artifact_path: 'safesock/libsafesocket/'
-    secrets: inherit
-  python-ci:
-    needs: [go-ci]
-    uses: Bastien-Antigravity/fleet-operation-brain/.github/workflows/workflow-python.yml@develop
-    with:
-      working_directory: 'safesock/python'
-      python_version: '3.12'
-      go_version: '1.25'
-      artifact_name: 'libsafesocket'
-      artifact_path: 'safesock/libsafesocket/'
-    secrets: inherit
-  rust-ci:
-    needs: [go-ci]
-    uses: Bastien-Antigravity/fleet-operation-brain/.github/workflows/workflow-rust.yml@develop
-    with:
-      working_directory: 'safesock/rust'
-      rust_version: '1.91'
-      go_version: '1.25'
-      artifact_name: 'libsafesocket'
-      artifact_path: 'safesock/libsafesocket/'
-    secrets: inherit
-  cpp-ci:
-    needs: [go-ci]
-    uses: Bastien-Antigravity/fleet-operation-brain/.github/workflows/workflow-cpp.yml@develop
-    with:
-      working_directory: 'safesock/cpp'
-      go_version: '1.25'
-      artifact_name: 'libsafesocket'
-      artifact_path: 'safesock/libsafesocket/'
     secrets: inherit
