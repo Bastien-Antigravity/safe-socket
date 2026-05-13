@@ -21,6 +21,7 @@ jobs:
       artifact_path: 'safesock/libsafesocket/'
     secrets: inherit
   python-ci:
+    needs: [go-ci]
     uses: Bastien-Antigravity/fleet-operation-brain/.github/workflows/workflow-python.yml@develop
     with:
       working_directory: 'safesock/python'
@@ -30,6 +31,7 @@ jobs:
       artifact_path: 'safesock/libsafesocket/'
     secrets: inherit
   rust-ci:
+    needs: [go-ci]
     uses: Bastien-Antigravity/fleet-operation-brain/.github/workflows/workflow-rust.yml@develop
     with:
       working_directory: 'safesock/rust'
@@ -39,6 +41,7 @@ jobs:
       artifact_path: 'safesock/libsafesocket/'
     secrets: inherit
   cpp-ci:
+    needs: [go-ci]
     uses: Bastien-Antigravity/fleet-operation-brain/.github/workflows/workflow-cpp.yml@develop
     with:
       working_directory: 'safesock/cpp'
