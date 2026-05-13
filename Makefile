@@ -10,6 +10,7 @@ LIB_NAME=libsafesocket
 
 all: build
 
+
 build: build-lib
 	mkdir -p bin
 	$(GOBUILD) -o bin/ ./cmd/...
