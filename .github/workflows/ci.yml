@@ -21,7 +21,7 @@ jobs:
   python-ci:
     uses: Bastien-Antigravity/fleet-operation-brain/.github/workflows/workflow-python.yml@develop
     with:
-      working_directory: 'python'
+      working_directory: 'safesock/python'
       python_version: '3.12'
       go_version: '1.25'
     secrets: inherit
