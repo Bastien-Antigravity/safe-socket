@@ -44,13 +44,12 @@ directives:
 - **Status**: ✅ Zero-Drift confirmed. Documentation reflects 100% functional parity with the Go engine and ecosystem standards.
 
 
-### 🛡️ FLEET SYNC - 2026-05-20 (Mission-ID: CI-EXPERIMENTAL)
-- **Objective**: Push experimental CI changes and resolve documentation compliance drift.
+### 🛡️ FLEET SYNC - 2026-05-20 (Mission-ID: CI-RESTORE)
+- **Objective**: Revert CI workflow name and finalize structural cleanup.
 - **Actions**:
-    - Renamed `ci.yml` to `ci_essai.yml` for experimental testing.
-    - Patched `AI-Init.md`, `AI-Project-DNA.md`, `AI-Session-State.md`, `TODO.md`, and `README.md` to resolve link and metadata errors identified by the compliance auditor.
-    - Verified all internal links include `.md` extension and added missing YAML frontmatter.
-- **Status**: ✅ Compliance drift resolved. Repository ready for fleet-wide push.
+    - Reverted `ci_essai.yml` back to `ci.yml`.
+    - Finalized documentation and metadata audit.
+- **Status**: ✅ CI Restored. Repository synchronized with ecosystem standards.
 
 ## 🐛 Local Issues / Bugs
 - None identified.
