@@ -1,3 +1,5 @@
+# [FLEET-ARCHITECT] Standardized Dependabot
+# Sync-ID: 2026-05-11-GLOBAL-001
 version: 2
 updates:
   - package-ecosystem: "gomod"
@@ -10,13 +12,18 @@ updates:
           - "*"
 
   - package-ecosystem: "pip"
-    directory: "/"
+    directory: "/safesock/python"
     schedule:
       interval: "weekly"
     groups:
       python-dependencies:
         patterns:
           - "*"
+
+  - package-ecosystem: "cargo"
+    directory: "/safesock/rust"
+    schedule:
+      interval: "weekly"
 
   - package-ecosystem: "github-actions"
     directory: "/"
