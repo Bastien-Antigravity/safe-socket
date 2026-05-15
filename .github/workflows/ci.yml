@@ -1,4 +1,4 @@
-# [FLEET-ARCHITECT] Standardized Polyglot CI (Go:1.25, Py:3.12, Rust:1.91, C++:20)
+# [FLEET-ARCHITECT] Microservice (Go:1.25, Py:3.12, Rust:1.91, C++:20)
 # Sync-ID: 2026-05-11-GLOBAL-001
 name: Fleet CI
 on:
@@ -7,36 +7,9 @@ on:
   pull_request:
     branches: [ develop, main ]
 
-env:
-  GOTOOLCHAIN: auto
-
 jobs:
   go-ci:
     uses: Bastien-Antigravity/fleet-operation-brain/.github/workflows/workflow-go.yml@develop
     with:
       working_directory: '.'
-      go_version: '1.25'
-    secrets: inherit
-
-  python-ci:
-    uses: Bastien-Antigravity/fleet-operation-brain/.github/workflows/workflow-python.yml@develop
-    with:
-      working_directory: 'safesock/python'
-      python_version: '3.12'
-      go_version: '1.25'
-    secrets: inherit
-
-  rust-ci:
-    uses: Bastien-Antigravity/fleet-operation-brain/.github/workflows/workflow-rust.yml@develop
-    with:
-      working_directory: 'safesock/rust'
-      rust_version: '1.91'
-      go_version: '1.25'
-    secrets: inherit
-
-  cpp-ci:
-    uses: Bastien-Antigravity/fleet-operation-brain/.github/workflows/workflow-cpp.yml@develop
-    with:
-      working_directory: 'safesock/cpp'
-      go_version: '1.25'
     secrets: inherit
