@@ -18,7 +18,7 @@ go get github.com/Bastien-Antigravity/safe-socket
 ```
 
 ## Features & Capabilities
-For a detailed breakdown of this library's features, polyglot SDKs, and BDD behavior specifications, refer to the **[[quick-overview/Features-Behavior|🚀 Features & Behavior Guide]]**.
+For a detailed breakdown of this library's features, polyglot SDKs, and BDD behavior specifications, refer to the **[🚀 Features & Behavior Guide](quick-overview/Features-Behavior.md)**.
 
 ## Usage
 
@@ -241,4 +241,3 @@ Since the Python wrapper uses a Go shared library, you must rebuild it using the
 ```bash
 go build -o python/safesocket/safe_socket.dll -buildmode=c-shared ./python/capi
 ```
-

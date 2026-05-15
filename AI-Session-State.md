@@ -44,10 +44,13 @@ directives:
 - **Status**: ✅ Zero-Drift confirmed. Documentation reflects 100% functional parity with the Go engine and ecosystem standards.
 
 
-### 🛡️ SENTINEL AUDIT - 2026-05-13
-- **Link Check**: Verified all relative links in `safesock/` point to valid directories.
-- **FFI Verification**: Confirmed bridge handle management narrative is consistent across all language architectures.
-- **Metadata**: Applied correct YAML frontmatter where required.
+### 🛡️ FLEET SYNC - 2026-05-20 (Mission-ID: CI-EXPERIMENTAL)
+- **Objective**: Push experimental CI changes and resolve documentation compliance drift.
+- **Actions**:
+    - Renamed `ci.yml` to `ci_essai.yml` for experimental testing.
+    - Patched `AI-Init.md`, `AI-Project-DNA.md`, `AI-Session-State.md`, `TODO.md`, and `README.md` to resolve link and metadata errors identified by the compliance auditor.
+    - Verified all internal links include `.md` extension and added missing YAML frontmatter.
+- **Status**: ✅ Compliance drift resolved. Repository ready for fleet-wide push.
 
 ## 🐛 Local Issues / Bugs
 - None identified.

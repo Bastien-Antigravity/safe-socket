@@ -1,3 +1,8 @@
+---
+microservice: safe-socket
+type: dna
+status: active
+---
 # 🧬 Project DNA: safe-socket
 
 ## 🎯 High-Level Intent (BDD)
@@ -5,10 +10,10 @@
 - **Key Pattern**: **Secure Proxy / Encapsulated Socket**.
 
 ## 🛠 Technical Constraints
-- **Architecture Standard**: Adheres to the ecosystem-wide standards in [[GEMINI.md]].
+- **Architecture Standard**: Adheres to the ecosystem-wide standards in [Architecture-Overview.md](quick-overview/Architecture-Overview.md).
 
 ## 👥 Roles & Responsibilities
 - **Architect**: 
     - Implement zero-trust security principles at the socket level.
 - **Developer**:
-    - Reference [[GEMINI.md]] for security dashboard UI standards.
+    - Reference [Architecture-Overview.md](quick-overview/Architecture-Overview.md) for security dashboard UI standards.
