@@ -8,8 +8,39 @@ on:
     branches: [ develop, main ]
 
 jobs:
+  sentinel-audit:
+    name: Sentinel Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout Core KMS Brain
+        uses: actions/checkout@v4
+        with:
+          repository: Bastien-Antigravity/core-kms-brain
+          path: core-kms-brain
+          token: ${{ secrets.GH_PAT }}
+      - name: Run Brain Health Audit
+        run: |
+          python core-kms-brain/Scripts/Brain-Health-Audit.py
+    secrets: inherit
+
   go-ci:
+    needs: sentinel-audit
     uses: Bastien-Antigravity/fleet-operation-brain/.github/workflows/workflow-go.yml@develop
     with:
       working_directory: '.'
+    secrets: inherit
+
+  python-ci:
+    needs: sentinel-audit
+    uses: Bastien-Antigravity/fleet-operation-brain/.github/workflows/workflow-python.yml@develop
+    with:
+      working_directory: 'safesock/python'
+    secrets: inherit
+
+  rust-ci:
+    needs: sentinel-audit
+    uses: Bastien-Antigravity/fleet-operation-brain/.github/workflows/workflow-rust.yml@develop
+    with:
+      working_directory: 'safesock/rust'
     secrets: inherit

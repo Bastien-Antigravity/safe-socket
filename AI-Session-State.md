@@ -29,6 +29,8 @@ directives:
 - [x] **Polyglot Forever**: Updated C API and Python wrapper to support `set_idle_timeout(0)`.
 - [x] **Zombie Detection Verified**: Added unit tests for silent-peer detection and forever-wait persistence.
 - [x] **Polyglot SDK Refactoring**: Moved CGO bridge to `src/cgo_bridge`, created Rust, C++, and VBA bindings, and refactored Python to ecosystem standards.
+- [x] **Fleet Verification (2026-05-15)**: Resolved toolchain drift (Python 3.12, Rust 1.91, C++20) and integrated `Brain-Health-Audit.py` as a blocking CI gate.
+- [x] **CI Expansion**: Enabled parallel polyglot testing for Python and Rust SDKs in `ci.yml`.
 - [x] **Documentation Audit (v1.9.0-Final)**: Consolidated documentation into `quick-overview/` and added missing `Map-of-Content.md`, `Governance.md`, and `Decision-Log.md` for full ecosystem parity.
 
 ### 📚 DOCUMENTATION AUDIT (DocMaintainer) - 2026-05-15

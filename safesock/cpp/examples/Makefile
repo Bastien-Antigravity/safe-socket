@@ -1,5 +1,5 @@
 CXX = g++
-CXXFLAGS = -std=c++14 -Wall -I..
+CXXFLAGS = -std=c++20 -Wall -I..
 LDFLAGS = -L../../libsafesocket -lsafesocket
 
 # Detect OS for library extension
