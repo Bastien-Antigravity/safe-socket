@@ -1,3 +1,7 @@
+---
+tags:
+- '#ai/ignore'
+---
 # Testing Playbook
 
 `safe-socket` is a high-reliability library. To ensure it handles race conditions, network edge cases, and high-frequency communication correctly, follow these testing procedures.

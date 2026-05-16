@@ -4,7 +4,8 @@ type: repository
 status: active
 language: go
 tags:
-  - domain/networking
+- \'#service/safe-socket\'
+  - '#domain/networking'
 ---
 
 # Safe Socket

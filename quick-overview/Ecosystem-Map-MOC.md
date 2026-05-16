@@ -2,6 +2,10 @@
 microservice: safe-socket
 type: documentation
 status: active
+
+tags:
+- \'#service/safe-socket\'
+- '#ai/ignore'
 ---
 
 # 🗺️ Ecosystem Map: safe-socket (MOC)

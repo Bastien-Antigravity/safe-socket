@@ -2,6 +2,10 @@
 microservice: safe-socket
 type: governance
 status: active
+
+tags:
+- \'#service/safe-socket\'
+- '#ai/ignore'
 ---
 
 # Governance

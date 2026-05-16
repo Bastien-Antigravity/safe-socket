@@ -1,3 +1,7 @@
+---
+tags:
+- '#ai/ignore'
+---
 # Architecture Overview
 
 `safe-socket` is built with a layered architecture to separate high-level operations, protocol logic, and low-level transport mechanisms. This modularity allows for easy extension, such as adding new transports or protocols without changing the public API.

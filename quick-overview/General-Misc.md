@@ -1,3 +1,7 @@
+---
+tags:
+- '#ai/ignore'
+---
 # General Miscellaneous Information
 
 This document contains miscellaneous information about the `safe-socket` project, including installation, supported profiles, polyglot SDKs, and default behaviors.

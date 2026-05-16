@@ -1,3 +1,7 @@
+---
+tags:
+- '#ai/ignore'
+---
 # Features & Behavior: Safe Socket
 
 ## 🚀 Core Features

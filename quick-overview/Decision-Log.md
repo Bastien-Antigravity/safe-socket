@@ -2,6 +2,10 @@
 microservice: safe-socket
 type: decision-log
 status: active
+
+tags:
+- \'#service/safe-socket\'
+- '#ai/ignore'
 ---
 
 # Decision Log
