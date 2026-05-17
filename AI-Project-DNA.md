@@ -2,6 +2,9 @@
 microservice: safe-socket
 type: dna
 status: active
+tags:
+- '#service/safe-socket'
+- '#zone/3-fleet'
 ---
 # 🧬 Project DNA: safe-socket
 

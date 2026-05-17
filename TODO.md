@@ -2,6 +2,9 @@
 microservice: safe-socket
 type: tasks
 status: active
+tags:
+- '#service/safe-socket'
+- '#zone/3-fleet'
 ---
 # TODO: safe-socket
 
