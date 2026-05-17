@@ -3,6 +3,7 @@ package facade
 import (
 	"errors"
 	"fmt"
+	"math/rand"
 	"strings"
 	"time"
 
@@ -46,6 +47,11 @@ func (c *SocketClient) Open() error {
 	c.mu.Unlock()
 
 	retries := 0
+	currentInterval := c.Config.RetryInterval
+	if currentInterval <= 0 {
+		currentInterval = 500 * time.Millisecond
+	}
+
 	for {
 		err := c.attemptOpen()
 		if err == nil {
@@ -59,10 +65,20 @@ func (c *SocketClient) Open() error {
 
 		retries++
 		if c.Logger != nil {
-			c.Logger.Warning(fmt.Sprintf("Socket open failed: %v. Retrying in %v (Attempt %d/%d)...", err, c.Config.RetryInterval, retries, c.Config.MaxRetries))
+			c.Logger.Warning(fmt.Sprintf("Socket open failed: %v. Retrying in %v (Attempt %d/%d)...", err, currentInterval, retries, c.Config.MaxRetries))
 		}
 
-		time.Sleep(c.Config.RetryInterval)
+		time.Sleep(currentInterval)
+
+		// Exponential Backoff with Jitter (FEAT-005)
+		// Max interval capped at 30s
+		nextInterval := float64(currentInterval) * 1.5
+		if nextInterval > float64(30*time.Second) {
+			nextInterval = float64(30 * time.Second)
+		}
+		// Apply 20% jitter
+		jitter := (rand.Float64() * 0.4) - 0.2 // -20% to +20%
+		currentInterval = time.Duration(nextInterval * (1 + jitter))
 	}
 }
 

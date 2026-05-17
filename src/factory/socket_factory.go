@@ -2,13 +2,13 @@ package factory
 
 import (
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/Bastien-Antigravity/safe-socket/src/facade"
 	"github.com/Bastien-Antigravity/safe-socket/src/interfaces"
 	"github.com/Bastien-Antigravity/safe-socket/src/models"
 	"github.com/Bastien-Antigravity/safe-socket/src/profiles"
-	"strings"
-	"time"
 )
 
 const (

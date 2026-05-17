@@ -5,10 +5,10 @@ status: active
 lifecycle:
   active_branch: develop
   protected_branches: [main, master]
-  current_version: 1.9.0
+  current_version: 1.10.0
   version_source: VERSION.txt
 done_when:
-  - parity_verified: false
+  - parity_verified: true
   - decision_log_updated: true
 directives:
   - autonomous-doc-sync: mandatory
@@ -24,6 +24,9 @@ directives:
 ## 🚀 Progress Tracking
 - [x] Initialized session state tracking for this repository.
 - [x] Synchronized with the Global Obsidian Brain.
+- [x] **v1.10.0 Stability**: Implemented Thread-Safety and Jittered Backoff.
+- [x] **Thread-Safety Audit**: Added mutex protection to `HeartbeatConnection` for atomic `Write` and `Read` operations, preventing race conditions between user data and background heartbeats.
+- [x] **Robust Reconnection**: Enhanced `SocketClient.Open` with jittered exponential backoff for autonomous recovery.
 - [x] **v1.9.0 Stability**: Implemented "Infinite Wait" (0) logic across all transport layers.
 - [x] **CI Stabilization**: Standardized `golangci-lint` config with `version: "1"` and corrected workflow linter version to `v1.64.2`.
 - [x] **Polyglot Forever**: Updated C API and Python wrapper to support `set_idle_timeout(0)`.
@@ -55,6 +58,6 @@ directives:
 - None identified.
 
 ## ⏭ Next Actions
-- [ ] Propagate v1.9.0 to `microservice-toolbox` and dependent microservices.
-- [ ] Implement environment variable overrides for timeouts.
+- [ ] Propagate v1.10.0 to `microservice-toolbox` and dependent microservices.
 - [ ] Research `microservice-toolbox` integration for PublicIP refresh.
+- [ ] Refactor UDP listener to support concurrent virtual connections (demultiplexing).
