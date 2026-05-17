@@ -11,3 +11,31 @@ jobs:
   fleet-ci:
     uses: Bastien-Antigravity/fleet-operation-brain/.github/workflows/master-ci.yml@develop
     secrets: inherit
+
+  polyglot-matrix:
+    name: Polyglot Interoperability
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: |
+          go mod download
+          python -m pip install --upgrade pip
+
+      - name: Run Interoperability Matrix
+        run: python3 tests/polyglot/matrix_test.py

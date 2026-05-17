@@ -21,6 +21,13 @@ Because the library utilizes background heartbeat goroutines and dynamic deadlin
 go test -race -v ./...
 ```
 
+### Polyglot Interoperability Matrix
+To ensure that all SDKs (Python, Rust, C++) are in sync with the Go core, we use an automated matrix test. This starts a Go server and validates communication with clients in multiple languages:
+```bash
+python3 tests/polyglot/matrix_test.py
+```
+*Note: Ensure `cargo` (Rust) and `g++` (C++) are installed to include them in the matrix validation.*
+
 ### Coverage Reports
 To generate and view a coverage report:
 ```bash
@@ -29,6 +36,7 @@ go tool cover -html=coverage.out
 ```
 
 ## Critical Safety Scenarios
+...
 
 We have implemented specialized tests for the "Safe" aspects of the library:
 

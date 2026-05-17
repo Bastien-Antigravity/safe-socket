@@ -81,9 +81,6 @@ func CreateWithConfig(profileName, address string, config models.SocketConfig, s
 	if config.Deadline == 0 {
 		config.Deadline = time.Duration(timeout) * time.Millisecond
 	}
-	if config.HeartbeatInterval == 0 {
-		config.HeartbeatInterval = 2 * time.Second // 2s default for high responsiveness
-	}
 
 	p, err := createProfile(profileName, address, st, timeout)
 	if err != nil {

@@ -6,10 +6,19 @@ GOTEST=$(GOCMD) test
 LIB_DIR=safesock/libsafesocket
 LIB_NAME=libsafesocket
 
+# Detect OS
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+    LIB_EXT = .dylib
+    LDFLAGS_SHARED = -ldflags="-extldflags=-Wl,-install_name,@rpath/$(LIB_NAME)$(LIB_EXT)"
+else
+    LIB_EXT = .so
+    LDFLAGS_SHARED = 
+endif
+
 .PHONY: all build clean test build-lib
 
 all: build
-
 
 build: build-lib
 	mkdir -p bin
@@ -17,10 +26,7 @@ build: build-lib
 
 build-lib:
 	mkdir -p $(LIB_DIR)
-	# Build for Linux/Unix
-	$(GOBUILD) -buildmode=c-shared -o $(LIB_DIR)/$(LIB_NAME).so ./cmd/libsafesocket
-	# macOS support: copy to .dylib if on Darwin or for clarity
-	cp $(LIB_DIR)/$(LIB_NAME).so $(LIB_DIR)/$(LIB_NAME).dylib || true
+	$(GOBUILD) $(LDFLAGS_SHARED) -buildmode=c-shared -o $(LIB_DIR)/$(LIB_NAME)$(LIB_EXT) ./cmd/libsafesocket
 
 build-dll:
 	mkdir -p $(LIB_DIR)

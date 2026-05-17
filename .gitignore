@@ -36,7 +36,7 @@ mock_output.txt
 # Python
 __pycache__/
 *.py[cod]
-*$py.class
+*.class
 .Python
 .venv/
 venv/
@@ -60,15 +60,18 @@ wheels/
 .coverage
 htmlcov/
 
-# Go
+# Go & C++ Binaries
 bin/
-/main
-/test
-/test_app
-/config-server
-/notif-server
-/tele-remote
-/log-server
+main
+test
+test_app
+matrix_server
+matrix_client
+basic_usage
+config-server
+notif-server
+tele-remote
+log-server
 vendor/
 go.work
 go.work.sum

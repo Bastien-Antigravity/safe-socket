@@ -21,7 +21,7 @@ type Identity = schemas.HelloMsg
 // Create creates a new safe-socket connection using a named profile.
 //
 // Parameters:
-//   - profileName: "tcp", "tcp-hello", "udp", "udp-hello", "shm", "shm-hello"
+//   - profileName: "tcp", "tcp-hello", "tls", "tls-hello", "udp", "udp-hello", "shm", "shm-hello"
 //   - address: destination address ("IP:Port" or "FilePath" for SHM)
 //   - publicIP: your public IP (Optional, resolved from environment/system if empty)
 //   - socketType: "client" or "server"
