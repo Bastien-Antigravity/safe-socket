@@ -3,7 +3,6 @@ package factory
 import (
 	"os"
 	"testing"
-	"time"
 
 	"github.com/Bastien-Antigravity/safe-socket/src/models"
 )
