@@ -17,7 +17,7 @@ func main() {
 	}
 
 	fmt.Printf("Matrix Server: Starting on %s\n", addr)
-	
+
 	// Create server with tcp-hello profile
 	server, err := safesocket.Create("tcp-hello:matrix-server", addr, "", "server", true)
 	if err != nil {
@@ -40,7 +40,7 @@ func main() {
 
 func handleConnection(conn interfaces.TransportConnection) {
 	defer conn.Close()
-	
+
 	// Get Peer Identity
 	identity := safesocket.GetIdentity(conn)
 	peerName := "Unknown"
@@ -48,9 +48,15 @@ func handleConnection(conn interfaces.TransportConnection) {
 	peerPublicIP := "Unknown"
 
 	if identity != nil {
-		if name, err := identity.FromName(); err == nil { peerName = name }
-		if host, err := identity.FromHost(); err == nil { peerHost = host }
-		if ip, err := identity.FromPublicIP(); err == nil { peerPublicIP = ip }
+		if name, err := identity.FromName(); err == nil {
+			peerName = name
+		}
+		if host, err := identity.FromHost(); err == nil {
+			peerHost = host
+		}
+		if ip, err := identity.FromPublicIP(); err == nil {
+			peerPublicIP = ip
+		}
 	}
 	fmt.Printf("Matrix Server: Accepted connection from %s (Host: %s, PublicIP: %s)\n", peerName, peerHost, peerPublicIP)
 
@@ -73,7 +79,7 @@ func handleConnection(conn interfaces.TransportConnection) {
 			payload = fmt.Sprintf("<Large Payload: %d bytes>", len(msg))
 		}
 		fmt.Printf("Matrix Server: Received from %s: %s\n", peerName, payload)
-		
+
 		var reply []byte
 		if string(msg) == "meta_request" {
 			replyStr := fmt.Sprintf("meta:%s,%s,%s", peerName, peerHost, peerPublicIP)

@@ -44,7 +44,7 @@ fn main() {
     };
 
     match SafeSocket::new("tcp-hello:rust-matrix", addr, Some(config), "client", true, &lib_path) {
-        Ok(mut sock) => {
+        Ok(sock) => {
             println!("Rust Client: Connected");
             
             // --- TEST 1: Basic Ping ---

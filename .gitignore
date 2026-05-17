@@ -60,18 +60,18 @@ wheels/
 .coverage
 htmlcov/
 
-# Go & C++ Binaries
-bin/
-main
-test
-test_app
-matrix_server
-matrix_client
-basic_usage
-config-server
-notif-server
-tele-remote
-log-server
+# Go & C++ Binaries (Root level)
+/bin/
+/main
+/test
+/test_app
+/matrix_server
+/matrix_client
+/basic_usage
+/config-server
+/notif-server
+/tele-remote
+/log-server
 vendor/
 go.work
 go.work.sum
