@@ -3,6 +3,7 @@ package facade
 import (
 	"errors"
 	"fmt"
+	"math/rand"
 	"strings"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/Bastien-Antigravity/safe-socket/src/models"
 	"github.com/Bastien-Antigravity/safe-socket/src/protocols"
 	"github.com/Bastien-Antigravity/safe-socket/src/transports"
+	"sync"
 )
 
 // SocketClient implements the interfaces.Socket interface for Client-side operations.
@@ -19,7 +21,8 @@ type SocketClient struct {
 	Profile   interfaces.SocketProfile
 	Config    models.SocketConfig
 	transport interfaces.TransportConnection
-	Logger    *interfaces.Logger
+	Logger    interfaces.Logger
+	mu        sync.RWMutex
 }
 
 // -----------------------------------------------------------------------------
@@ -34,11 +37,52 @@ func NewSocketClient(p interfaces.SocketProfile, c models.SocketConfig) *SocketC
 // -----------------------------------------------------------------------------
 
 // Open establishes the connection using the configured transport and protocol.
+// If MaxRetries > 0, it will attempt reconnection on failure.
 func (c *SocketClient) Open() error {
+	c.mu.Lock()
 	if c.transport != nil {
+		c.mu.Unlock()
 		return errors.New("socket already open")
 	}
+	c.mu.Unlock()
 
+	retries := 0
+	currentInterval := c.Config.RetryInterval
+	if currentInterval <= 0 {
+		currentInterval = 500 * time.Millisecond
+	}
+
+	for {
+		err := c.attemptOpen()
+		if err == nil {
+			return nil
+		}
+
+		// Check if we should retry
+		if c.Config.MaxRetries == 0 || (c.Config.MaxRetries > 0 && retries >= c.Config.MaxRetries) {
+			return fmt.Errorf("failed to open socket after %d attempts: %w", retries+1, err)
+		}
+
+		retries++
+		if c.Logger != nil {
+			c.Logger.Warning(fmt.Sprintf("Socket open failed: %v. Retrying in %v (Attempt %d/%d)...", err, currentInterval, retries, c.Config.MaxRetries))
+		}
+
+		time.Sleep(currentInterval)
+
+		// Exponential Backoff with Jitter (FEAT-005)
+		// Max interval capped at 30s
+		nextInterval := float64(currentInterval) * 1.5
+		if nextInterval > float64(30*time.Second) {
+			nextInterval = float64(30 * time.Second)
+		}
+		// Apply 20% jitter
+		jitter := (rand.Float64() * 0.4) - 0.2 // -20% to +20%
+		currentInterval = time.Duration(nextInterval * (1 + jitter))
+	}
+}
+
+func (c *SocketClient) attemptOpen() error {
 	// 1. Create Transport & Connect
 	var conn interfaces.TransportConnection
 	var err error
@@ -57,10 +101,11 @@ func (c *SocketClient) Open() error {
 	}
 
 	switch c.Profile.GetTransport() {
+	case interfaces.TransportTLS:
+		conn, err = transports.ConnectTLS(c.Profile.GetAddress(), idleTimeout, c.Config.CertFile, c.Config.KeyFile, c.Config.CAFile, c.Config.ServerName, c.Config.InsecureSkipVerify)
 	case interfaces.TransportFramedTCP:
 		conn, err = transports.Connect(c.Profile.GetAddress(), idleTimeout)
 	case interfaces.TransportShm:
-		// For SHM, we use Name as the identifier/path
 		conn, err = transports.ConnectShm(c.Profile.GetName(), idleTimeout)
 	case interfaces.TransportUDP:
 		conn, err = transports.ConnectUDP(c.Profile.GetAddress(), idleTimeout)
@@ -72,57 +117,56 @@ func (c *SocketClient) Open() error {
 		return err
 	}
 
+	// 1b. Apply Reliability Layer if requested (UDP only)
+	if c.Config.Reliable && c.Profile.GetTransport() == interfaces.TransportUDP {
+		conn = NewReliableConnection(conn)
+	}
+
 	// 2. Encapsulation / Handshake Logic
-	// Case A: UDP + Hello (Stateless Envelope)
 	if c.Profile.GetTransport() == interfaces.TransportUDP &&
 		c.Profile.GetProtocol() == interfaces.ProtocolHello {
-
-		// Wrap connection to handle Per-Packet Encapsulation
 		conn = NewEnvelopedConnection(conn, c.Profile, c.Config)
-
-		// No initial handshake packet sent here.
-		// The first Send() will carry the identity.
-
 	} else if c.Profile.GetProtocol() != "" && c.Profile.GetProtocol() != interfaces.ProtocolNone {
-		// Case B: Connection-Oriented (TCP/SHM) + Hello
-		// Perform Standard Handshake
 		proto := protocols.NewHelloProtocol()
-
 		if err := proto.Initiate(conn, c.Profile, c.Config); err != nil {
-			conn.Close()
+			_ = conn.Close()
 			return err
 		}
 	}
 
 	// 3. Heartbeat Optimization & Safety Ratio
-	if c.Config.HeartbeatInterval == 0 {
-		// Calculate optimal heartbeat (IdleTimeout / 2.5)
-		heartbeat := time.Duration(float64(idleTimeout) / 2.5)
-
-		// Threshold Check (Network: 300ms, Local: 150ms, SHM: 50ms)
-		threshold := 300 * time.Millisecond // Default (Networking)
-		addr := c.Profile.GetAddress()
-		isLocal := strings.Contains(addr, "127.0.0.1") || strings.Contains(addr, "localhost")
-		isShm := c.Profile.GetTransport() == interfaces.TransportShm
-
-		transportName := "networking"
-		if isShm {
-			threshold = 50 * time.Millisecond
-			transportName = "shared memory"
-		} else if isLocal {
-			threshold = 150 * time.Millisecond
-			transportName = "local"
+	heartbeatInterval := c.Config.HeartbeatInterval
+	if heartbeatInterval == 0 {
+		heartbeatInterval = time.Duration(float64(idleTimeout) / 2.5)
+	} else if idleTimeout > 0 && float64(heartbeatInterval)*2.5 > float64(idleTimeout) {
+		// If user provided an unsafe heartbeat (too close to deadline), adjust it
+		newHeartbeat := time.Duration(float64(idleTimeout) / 2.5)
+		if c.Logger != nil {
+			c.Logger.Warning(fmt.Sprintf("User HeartbeatInterval (%v) is too close to IdleTimeout (%v). Adjusting to safety ratio: %v",
+				heartbeatInterval, idleTimeout, newHeartbeat))
 		}
-
-		if idleTimeout < threshold {
-			fmt.Printf("Heartbeat disabled: IdleTimeout (%dms) is below the threshold for %s transport. Connection will close if inactive.\n", idleTimeout.Milliseconds(), transportName)
-		} else {
-			c.Config.HeartbeatInterval = heartbeat
-		}
+		heartbeatInterval = newHeartbeat
 	}
 
-	c.transport = NewHeartbeatConnection(conn, c.Config.HeartbeatInterval)
+	// Threshold Check (Network: 300ms, Local: 150ms, SHM: 50ms)
+	threshold := 300 * time.Millisecond
+	addr := c.Profile.GetAddress()
+	isLocal := strings.Contains(addr, "127.0.0.1") || strings.Contains(addr, "localhost")
+	isShm := c.Profile.GetTransport() == interfaces.TransportShm
 
+	if isShm {
+		threshold = 50 * time.Millisecond
+	} else if isLocal {
+		threshold = 150 * time.Millisecond
+	}
+
+	if idleTimeout > 0 && idleTimeout < threshold {
+		heartbeatInterval = 0 // Disabled
+	}
+
+	c.mu.Lock()
+	c.transport = NewHeartbeatConnection(conn, heartbeatInterval)
+	c.mu.Unlock()
 	return nil
 }
 
@@ -132,19 +176,27 @@ func (c *SocketClient) Open() error {
 
 // Send writes the raw data to the transport.
 func (c *SocketClient) Send(data []byte) error {
-	if c.transport == nil {
+	c.mu.RLock()
+	tr := c.transport
+	c.mu.RUnlock()
+
+	if tr == nil {
 		return errors.New("socket not open")
 	}
-	_, err := c.transport.Write(data)
+	_, err := tr.Write(data)
 	return err
 }
 
 // Write implements the io.Writer interface in logger.
 func (c *SocketClient) Write(data []byte) (int, error) {
-	if c.transport == nil {
+	c.mu.RLock()
+	tr := c.transport
+	c.mu.RUnlock()
+
+	if tr == nil {
 		return 0, errors.New("socket not open")
 	}
-	n, err := c.transport.Write(data)
+	n, err := tr.Write(data)
 	return n, err
 }
 
@@ -153,27 +205,38 @@ func (c *SocketClient) Write(data []byte) (int, error) {
 // Receive reads from the transport into a newly allocated buffer.
 // It returns the data read and any error encountered.
 func (c *SocketClient) Receive() ([]byte, error) {
-	if c.transport == nil {
+	c.mu.RLock()
+	tr := c.transport
+	c.mu.RUnlock()
+
+	if tr == nil {
 		return nil, errors.New("socket not open")
 	}
-	return c.transport.ReadMessage()
+	return tr.ReadMessage()
 }
 
 // Read reads from the transport into the provided buffer (io.Reader compliance).
 func (c *SocketClient) Read(p []byte) (int, error) {
-	if c.transport == nil {
+	c.mu.RLock()
+	tr := c.transport
+	c.mu.RUnlock()
+
+	if tr == nil {
 		return 0, errors.New("socket not open")
 	}
-	return c.transport.Read(p)
+	return tr.Read(p)
 }
 
 // -----------------------------------------------------------------------------
 
 func (c *SocketClient) Close() error {
-	if c.transport != nil {
-		err := c.transport.Close()
-		c.transport = nil
-		return err
+	c.mu.Lock()
+	tr := c.transport
+	c.transport = nil
+	c.mu.Unlock()
+
+	if tr != nil {
+		return tr.Close()
 	}
 	return nil
 }
@@ -182,39 +245,55 @@ func (c *SocketClient) Close() error {
 
 // SetDeadline sets the read and write deadlines associated with the connection.
 func (c *SocketClient) SetDeadline(t time.Time) error {
-	if c.transport == nil {
+	c.mu.RLock()
+	tr := c.transport
+	c.mu.RUnlock()
+
+	if tr == nil {
 		return errors.New("socket not open")
 	}
-	return c.transport.SetDeadline(t)
+	return tr.SetDeadline(t)
 }
 
 // -----------------------------------------------------------------------------
 
 // SetReadDeadline sets the deadline for future Read calls.
 func (c *SocketClient) SetReadDeadline(t time.Time) error {
-	if c.transport == nil {
+	c.mu.RLock()
+	tr := c.transport
+	c.mu.RUnlock()
+
+	if tr == nil {
 		return errors.New("socket not open")
 	}
-	return c.transport.SetReadDeadline(t)
+	return tr.SetReadDeadline(t)
 }
 
 // -----------------------------------------------------------------------------
 
 // SetWriteDeadline sets the deadline for future Write calls.
 func (c *SocketClient) SetWriteDeadline(t time.Time) error {
-	if c.transport == nil {
+	c.mu.RLock()
+	tr := c.transport
+	c.mu.RUnlock()
+
+	if tr == nil {
 		return errors.New("socket not open")
 	}
-	return c.transport.SetWriteDeadline(t)
+	return tr.SetWriteDeadline(t)
 }
 
 // -----------------------------------------------------------------------------
 
 // SetIdleTimeout updates the internal idle timeout and refreshes the current deadline.
 func (c *SocketClient) SetIdleTimeout(d time.Duration) error {
+	c.mu.Lock()
 	c.Config.Deadline = d
-	if c.transport != nil {
-		return c.transport.SetIdleTimeout(d)
+	tr := c.transport
+	c.mu.Unlock()
+
+	if tr != nil {
+		return tr.SetIdleTimeout(d)
 	}
 	return nil
 }
@@ -222,7 +301,7 @@ func (c *SocketClient) SetIdleTimeout(d time.Duration) error {
 // -----------------------------------------------------------------------------
 
 // Bind logger to safe-socket
-func (c *SocketClient) SetLogger(logger *interfaces.Logger) {
+func (c *SocketClient) SetLogger(logger interfaces.Logger) {
 	c.Logger = logger
 }
 

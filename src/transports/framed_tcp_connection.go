@@ -8,6 +8,9 @@ import (
 	"time"
 )
 
+// MaxPayloadSize defines the upper limit for incoming frames (default 64MB).
+const MaxPayloadSize = 64 * 1024 * 1024
+
 // FramedTCPSocket implements interfaces.TransportConnection.
 // It uses a 4-byte BigEndian length header for every write.
 type FramedTCPSocket struct {
@@ -160,6 +163,11 @@ func (s *FramedTCPSocket) Read(p []byte) (n int, err error) {
 		// 2. Decode Length
 		length := binary.BigEndian.Uint32(header)
 
+		// OOM PROTECTION: Reject oversized frames before allocation
+		if length > MaxPayloadSize {
+			return 0, io.ErrUnexpectedEOF // Or custom ErrPayloadTooLarge
+		}
+
 		// HEARTBEAT: Length 0 frames are heartbeats. Consume and continue.
 		if length == 0 {
 			if _, err := s.reader.Discard(4); err != nil {
@@ -196,6 +204,11 @@ func (s *FramedTCPSocket) ReadMessage() ([]byte, error) {
 			return nil, err
 		}
 		length := binary.BigEndian.Uint32(header)
+
+		// OOM PROTECTION: Reject oversized frames before allocation
+		if length > MaxPayloadSize {
+			return nil, io.ErrUnexpectedEOF
+		}
 
 		// HEARTBEAT: Length 0 frames are heartbeats. Consume and continue.
 		if length == 0 {

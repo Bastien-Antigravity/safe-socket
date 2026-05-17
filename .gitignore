@@ -10,6 +10,7 @@
 .Trashes
 Thumbs.db
 ehthumbs.db
+*.mdb
 
 # IDEs
 .vscode/
@@ -35,7 +36,7 @@ mock_output.txt
 # Python
 __pycache__/
 *.py[cod]
-*$py.class
+*.class
 .Python
 .venv/
 venv/
@@ -59,11 +60,14 @@ wheels/
 .coverage
 htmlcov/
 
-# Go
-bin/
+# Go & C++ Binaries (Root level)
+/bin/
 /main
 /test
 /test_app
+/matrix_server
+/matrix_client
+/basic_usage
 /config-server
 /notif-server
 /tele-remote
@@ -72,6 +76,10 @@ vendor/
 go.work
 go.work.sum
 __debug_*
+
+# Subdirectory Binaries
+safesock/cpp/examples/matrix_client
+safesock/cpp/examples/basic_usage
 
 # Rust
 target/
@@ -89,3 +97,37 @@ zzz_memo
 # Binary / Data
 *.exe
 *.pkl
+# 🌍 Bastien-Antigravity Global GitIgnore Template
+# Purpose: Unified noise-reduction across the fleet.
+# --- System Files ---
+desktop.ini
+# --- IDEs & Editors ---
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*~
+.fleet/
+.helix/
+# --- Build & Dependency Artifacts ---
+# Rust
+# Go
+__debug_bin
+*.test
+# Python
+.venv
+# C++
+obj/
+*.o
+*.a
+*.so
+*.out
+# --- Secrets & Config ---
+.env*
+*.pem
+*.key
+*.cert
+secrets.yaml
+# --- Project Specific Noise ---
+*.bak
+*.tmp

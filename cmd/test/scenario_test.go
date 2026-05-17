@@ -33,7 +33,7 @@ func TestScenario_CustomParameters(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create server: %v", err)
 	}
-	defer server.Close()
+	defer func() { _ = server.Close() }()
 
 	// 2. Create Client with custom parameters
 	client, err := factory.CreateWithConfig("tcp-hello:scenario-client", addr, customConfig, "client", false)
@@ -47,7 +47,7 @@ func TestScenario_CustomParameters(t *testing.T) {
 		t.Fatalf("Handshake failed with custom parameters: %v", err)
 	}
 	fmt.Printf("Handshake completed in %v\n", time.Since(start))
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// 3. Verify Deadline enforcement
 	// Server waits, client does nothing, should timeout in ~100ms
@@ -58,7 +58,7 @@ func TestScenario_CustomParameters(t *testing.T) {
 			errChan <- err
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		buf := make([]byte, 10)
 		_, err = conn.Read(buf)

@@ -1,13 +1,20 @@
 package test
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"fmt"
+	"math/big"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/Bastien-Antigravity/safe-socket/src/facade"
 	"github.com/Bastien-Antigravity/safe-socket/src/factory"
+	"github.com/Bastien-Antigravity/safe-socket/src/models"
 	"github.com/Bastien-Antigravity/safe-socket/src/protocols"
 )
 
@@ -24,7 +31,7 @@ func TestTCP_Raw(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create TCP server: %v", err)
 	}
-	defer server.Close()
+	defer func() { _ = server.Close() }()
 
 	errChan := make(chan error, 1)
 	go func() {
@@ -34,7 +41,7 @@ func TestTCP_Raw(t *testing.T) {
 			errChan <- fmt.Errorf("Accept failed: %v", err)
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		// Read
 		buf := make([]byte, 1024)
@@ -64,7 +71,7 @@ func TestTCP_Raw(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create TCP client: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// 3. Exchange
 	if err := client.Send([]byte("TCP_PING")); err != nil {
@@ -100,7 +107,7 @@ func TestTCP_Raw_Write_Method(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create TCP server: %v", err)
 	}
-	defer server.Close()
+	defer func() { _ = server.Close() }()
 
 	errChan := make(chan error, 1)
 	go func() {
@@ -109,7 +116,7 @@ func TestTCP_Raw_Write_Method(t *testing.T) {
 			errChan <- fmt.Errorf("Accept failed: %v", err)
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		buf := make([]byte, 1024)
 		n, err := conn.Read(buf)
@@ -132,7 +139,7 @@ func TestTCP_Raw_Write_Method(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create TCP client: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// 3. Use the new Write method (which returns count and error)
 	if _, err := client.Write([]byte("WRITE_TEST")); err != nil {
@@ -159,7 +166,7 @@ func TestTCP_Hello(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create TCP Hello server: %v", err)
 	}
-	defer server.Close()
+	defer func() { _ = server.Close() }()
 
 	errChan := make(chan error, 1)
 	go func() {
@@ -169,7 +176,7 @@ func TestTCP_Hello(t *testing.T) {
 			errChan <- fmt.Errorf("Accept failed (Handshake error?): %v", err)
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		// Verify Identity Access (Unwrap Heartbeat if present)
 		inner := conn
@@ -202,7 +209,7 @@ func TestTCP_Hello(t *testing.T) {
 	if err := client.Open(); err != nil {
 		t.Fatalf("Client Open (Handshake) failed: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// 3. Send Data
 	if err := client.Send([]byte("HELLO_TCP")); err != nil {
@@ -233,7 +240,7 @@ func TestUDP_Raw(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create UDP server: %v", err)
 	}
-	defer server.Close()
+	defer func() { _ = server.Close() }()
 
 	errChan := make(chan error, 1)
 	go func() {
@@ -270,7 +277,7 @@ func TestUDP_Raw(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create UDP client: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	if err := client.Send([]byte("UDP_PING")); err != nil {
 		t.Fatalf("Client send failed: %v", err)
@@ -296,7 +303,7 @@ func TestUDP_Hello(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create UDP Hello server: %v", err)
 	}
-	defer server.Close()
+	defer func() { _ = server.Close() }()
 
 	errChan := make(chan error, 1)
 	go func() {
@@ -307,7 +314,7 @@ func TestUDP_Hello(t *testing.T) {
 			errChan <- fmt.Errorf("Accept failed: %v", err)
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		// Allow time for testing (Unwrap Heartbeat if present)
 		var env *facade.EnvelopedConnection
@@ -343,7 +350,7 @@ func TestUDP_Hello(t *testing.T) {
 	if err := client.Open(); err != nil {
 		t.Fatalf("Client Open failed: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// 3. Send Data (triggers the Envelope + Send)
 	// Open() alone sends nothing for UDP-Hello now!
@@ -362,23 +369,274 @@ func TestUDP_Hello(t *testing.T) {
 	}
 }
 
-// -----------------------------------------------------------------------------
-// SHM Tests
-// -----------------------------------------------------------------------------
+// TestUDP_Reliable Verifies UDP with Reliability Layer (ACKs/Retries)
+func TestUDP_Reliable(t *testing.T) {
+	addr := "127.0.0.1:9003"
 
-// TestSHM_Creation Verifies we can create the SHM objects
-func TestSHM_Creation(t *testing.T) {
-	path := "test_shm_file"
-	defer os.Remove(path)
+	// 1. Start Server with Reliable: true
+	config := models.SocketConfig{
+		Reliable: true,
+	}
+	server, err := factory.CreateWithConfig("udp", addr, config, "server", true)
+	if err != nil {
+		t.Fatalf("Failed to create Reliable UDP server: %v", err)
+	}
+	defer func() { _ = server.Close() }()
 
-	// Only testing Client creation as Server side isn't implemented effectively for SHM yet
+	errChan := make(chan error, 1)
+	go func() {
+		conn, err := server.Accept()
+		if err != nil {
+			errChan <- fmt.Errorf("Accept failed: %v", err)
+			return
+		}
+		defer func() { _ = conn.Close() }()
+
+		buf := make([]byte, 1024)
+		n, err := conn.Read(buf)
+		if err != nil {
+			errChan <- fmt.Errorf("Read failed: %v", err)
+			return
+		}
+
+		msg := string(buf[:n])
+		if msg != "RELIABLE_PING" {
+			errChan <- fmt.Errorf("Unexpected message: %s", msg)
+			return
+		}
+
+		_, err = conn.Write([]byte("RELIABLE_PONG"))
+		errChan <- err
+	}()
+
+	// 2. Start Client with Reliable: true
+	client, err := factory.CreateWithConfig("udp", addr, config, "client", true)
+	if err != nil {
+		t.Fatalf("Failed to create Reliable UDP client: %v", err)
+	}
+	defer func() { _ = client.Close() }()
+
+	if err := client.Send([]byte("RELIABLE_PING")); err != nil {
+		t.Fatalf("Client send failed: %v", err)
+	}
+
+	resp, err := client.Receive()
+	if err != nil {
+		t.Fatalf("Client receive failed: %v", err)
+	}
+
+	if string(resp) != "RELIABLE_PONG" {
+		t.Errorf("Unexpected response: %s", string(resp))
+	}
+
+	// 3. Wait for server result
+	select {
+	case err := <-errChan:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Timeout waiting for Reliable UDP exchange")
+	}
+}
+
+// TestSHM_FullExchange Verifies server/client exchange via SHM
+func TestSHM_FullExchange(t *testing.T) {
+	path := "test_shm_exchange"
+	defer func() { _ = os.Remove(path) }()
+
+	// 1. Create Server
+	server, err := factory.Create("shm", path, "", "server", true)
+	if err != nil {
+		t.Fatalf("Failed to create SHM server: %v", err)
+	}
+	defer func() { _ = server.Close() }()
+
+	// 2. Create Client
 	client, err := factory.Create("shm", path, "", "client", false)
 	if err != nil {
 		t.Fatalf("Failed to create SHM client: %v", err)
 	}
 
+	// 3. Accept and Open
+	errChan := make(chan error, 1)
+	go func() {
+		conn, err := server.Accept()
+		if err != nil {
+			errChan <- err
+			return
+		}
+		defer func() { _ = conn.Close() }()
+
+		msg, err := conn.ReadMessage()
+		if err != nil {
+			errChan <- err
+			return
+		}
+		if string(msg) != "Hello SHM" {
+			errChan <- fmt.Errorf("unexpected message: %s", string(msg))
+			return
+		}
+
+		_, err = conn.Write([]byte("Hello Back"))
+		errChan <- err
+	}()
+
 	if err := client.Open(); err != nil {
-		t.Fatalf("Failed to open SHM: %v", err)
+		t.Fatalf("Failed to open SHM client: %v", err)
 	}
-	client.Close()
+	defer func() { _ = client.Close() }()
+
+	if err := client.Send([]byte("Hello SHM")); err != nil {
+		t.Fatalf("Failed to send: %v", err)
+	}
+
+	resp, err := client.Receive()
+	if err != nil {
+		t.Fatalf("Failed to receive: %v", err)
+	}
+
+	if string(resp) != "Hello Back" {
+		t.Errorf("Unexpected response: %s", string(resp))
+	}
+
+	if err := <-errChan; err != nil {
+		t.Errorf("Server error: %v", err)
+	}
+}
+
+// -----------------------------------------------------------------------------
+// TLS Tests
+// -----------------------------------------------------------------------------
+
+// TestTLS_Hello Verifies TCP with TLS and Hello Protocol
+func TestTLS_Hello(t *testing.T) {
+	addr := "127.0.0.1:9004"
+
+	// 1. Generate Certificates
+	certFile := "test_server.crt"
+	keyFile := "test_server.key"
+	err := generateSelfSignedCert(certFile, keyFile)
+	if err != nil {
+		t.Fatalf("Failed to generate certs: %v", err)
+	}
+	defer func() {
+		_ = os.Remove(certFile)
+		_ = os.Remove(keyFile)
+	}()
+
+	// 2. Start Server with TLS config
+	config := models.SocketConfig{
+		CertFile: certFile,
+		KeyFile:  keyFile,
+		Deadline: 1 * time.Second,
+	}
+	server, err := factory.CreateWithConfig("tls-hello:test-tls-server", addr, config, "server", true)
+	if err != nil {
+		t.Fatalf("Failed to create TLS server: %v", err)
+	}
+	defer func() { _ = server.Close() }()
+
+	errChan := make(chan error, 1)
+	go func() {
+		conn, err := server.Accept()
+		if err != nil {
+			errChan <- fmt.Errorf("Accept failed: %v", err)
+			return
+		}
+		defer func() { _ = conn.Close() }()
+
+		buf := make([]byte, 1024)
+		n, err := conn.Read(buf)
+		if err != nil {
+			errChan <- fmt.Errorf("Read failed: %v", err)
+			return
+		}
+
+		msg := string(buf[:n])
+		if msg != "TLS_HELLO" {
+			errChan <- fmt.Errorf("Unexpected message: %s", msg)
+			return
+		}
+
+		_, err = conn.Write([]byte("TLS_BACK"))
+		errChan <- err
+	}()
+
+	// 3. Start Client with TLS config
+	clientConfig := models.SocketConfig{
+		InsecureSkipVerify: true, // Self-signed
+		Deadline:           1 * time.Second,
+	}
+	client, err := factory.CreateWithConfig("tls-hello:test-tls-client", addr, clientConfig, "client", true)
+	if err != nil {
+		t.Fatalf("Failed to create TLS client: %v", err)
+	}
+	defer func() { _ = client.Close() }()
+
+	if err := client.Send([]byte("TLS_HELLO")); err != nil {
+		t.Fatalf("Client send failed: %v", err)
+	}
+
+	resp, err := client.Receive()
+	if err != nil {
+		t.Fatalf("Client receive failed: %v", err)
+	}
+
+	if string(resp) != "TLS_BACK" {
+		t.Errorf("Unexpected response: %s", string(resp))
+	}
+
+	if err := <-errChan; err != nil {
+		t.Errorf("Server error: %v", err)
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Helpers
+// -----------------------------------------------------------------------------
+
+func generateSelfSignedCert(certPath, keyPath string) error {
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return err
+	}
+
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject: pkix.Name{
+			Organization: []string{"SafeSocket Test"},
+		},
+		NotBefore: time.Now(),
+		NotAfter:  time.Now().Add(time.Hour),
+
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+	}
+
+	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
+	if err != nil {
+		return err
+	}
+
+	certOut, err := os.Create(certPath)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = certOut.Close() }()
+	if err := pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes}); err != nil {
+		return err
+	}
+
+	keyOut, err := os.OpenFile(keyPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = keyOut.Close() }()
+	if err := pem.Encode(keyOut, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(priv)}); err != nil {
+		return err
+	}
+
+	return nil
 }

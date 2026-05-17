@@ -13,7 +13,7 @@ func TestFramedTCPHeartbeatRead(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to listen: %v", err)
 	}
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 
 	addr := ln.Addr().String()
 
@@ -23,7 +23,7 @@ func TestFramedTCPHeartbeatRead(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		// Send three heartbeats (0-length frames)
 		// Frame: [4-byte BigEndian length]
@@ -48,7 +48,7 @@ func TestFramedTCPHeartbeatRead(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to dial: %v", err)
 	}
-	defer rawConn.Close()
+	defer func() { _ = rawConn.Close() }()
 
 	sock := NewFramedTCPSocket(rawConn, 1*time.Second)
 
@@ -66,12 +66,12 @@ func TestFramedTCPHeartbeatRead(t *testing.T) {
 func TestFramedTCPHeartbeatReadMessage(t *testing.T) {
 	// Similar test for ReadMessage
 	ln, _ := net.Listen("tcp", "127.0.0.1:0")
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 	addr := ln.Addr().String()
 
 	go func() {
 		conn, _ := ln.Accept()
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		hb := make([]byte, 4)
 		binary.BigEndian.PutUint32(hb, 0)
@@ -85,7 +85,7 @@ func TestFramedTCPHeartbeatReadMessage(t *testing.T) {
 	}()
 
 	rawConn, _ := net.Dial("tcp", addr)
-	defer rawConn.Close()
+	defer func() { _ = rawConn.Close() }()
 	sock := NewFramedTCPSocket(rawConn, 1*time.Second)
 
 	// Verify heartbeat is skipped and we get the payload

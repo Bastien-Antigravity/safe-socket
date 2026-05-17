@@ -13,6 +13,8 @@ type HeartbeatConnection struct {
 	stopHeartbeat chan struct{}
 	closeOnce     sync.Once
 	mu            sync.Mutex
+	writeMu       sync.Mutex
+	readMu        sync.Mutex
 	interval      time.Duration
 }
 
@@ -34,16 +36,35 @@ func (h *HeartbeatConnection) start(interval time.Duration, stopChan chan struct
 	for {
 		select {
 		case <-ticker.C:
-			_, err := h.TransportConnection.Write([]byte{})
+			//nolint:staticcheck // QF1008: Explicit selector preferred for clarity and future-proofing
+			_, err := h.Write([]byte{})
 			if err != nil {
 				// FAIL-FAST: Close the connection if heartbeat fails.
-				_ = h.Close()
+				_ = h.TransportConnection.Close()
 				return
 			}
 		case <-stopChan:
 			return
 		}
 	}
+}
+
+func (h *HeartbeatConnection) Write(p []byte) (n int, err error) {
+	h.writeMu.Lock()
+	defer h.writeMu.Unlock()
+	return h.TransportConnection.Write(p)
+}
+
+func (h *HeartbeatConnection) Read(p []byte) (n int, err error) {
+	h.readMu.Lock()
+	defer h.readMu.Unlock()
+	return h.TransportConnection.Read(p)
+}
+
+func (h *HeartbeatConnection) ReadMessage() ([]byte, error) {
+	h.readMu.Lock()
+	defer h.readMu.Unlock()
+	return h.TransportConnection.ReadMessage()
 }
 
 func (h *HeartbeatConnection) Close() error {

@@ -4,12 +4,14 @@ type: repository
 status: active
 language: go
 tags:
-  - domain/networking
+- '#service/safe-socket'
+- '#domain/networking'
+- '#zone/3-fleet'
 ---
 
 # Safe Socket
 
-**Safe Socket** is a high-performance, robust socket library for Go. It provides a reliable abstraction over **TCP**, **UDP**, and **Shared Memory (SHM)** transports with a flexible, profile-based configuration system.
+**Safe Socket** is a high-performance, robust socket library for Go. It provides a reliable abstraction over **TCP**, **TLS**, **UDP**, and **Shared Memory (SHM)** transports with a flexible, profile-based configuration system.
 
 ## Installation
 
@@ -17,19 +19,8 @@ tags:
 go get github.com/Bastien-Antigravity/safe-socket
 ```
 
-## Features
-
--   **Modular Transports**:
--   **Modular Transports**:
-    -   **Framed TCP**: Reliable, persistent connections with message framing. Optimizes `Read()` via buffering to support safe buffer pooling (prevents header loss on short reads). 
-    -   **Heartbeat Support**: Automatically handles 0-length frames as heartbeats. Includes an **Adaptive safety-ratio (2.5x)** that ensures heartbeats always fire before an idle timeout occurs.
-    -   **UDP**: High-speed, connectionless communication with optional reliability layers.
-    -   **Shared Memory (SHM)**: Ultra-low latency IPC for local processes using memory-mapped files (Ring Buffer).
--   **Intelligent Protocols**:
-    -   **Hello Protocol**: Identity exchange handshake.
-    -   **Stateless Envelope (UDP)**: Zero-handshake authentication where every packet carries the sender's identity and payload.
--   **Unified Facade**: Interact with any transport using `Open()`, `Close()`, `Send()`, `Receive()`, and `Accept()`.
--   **Aggressive Responsiveness**: Optimized for high-frequency microservice environments with extremely tight default timeouts (500ms network / 100ms SHM) and an active activity-refresh deadline model.
+## Features & Capabilities
+For a detailed breakdown of this library's features, polyglot SDKs, and BDD behavior specifications, refer to the **[🚀 Features & Behavior Guide](quick-overview/Features-Behavior.md)**.
 
 ## Usage
 
@@ -40,15 +31,16 @@ Use `safesocket.Create` to instantiate and connect in one line.
 ```go
 import (
 	"log"
+    "time"
 
-	safe_socket "github.com/Bastien-Antigravity/safe-socket"
+	"github.com/Bastien-Antigravity/safe-socket"
 )
 
 func main() {
     // Example: Connect to a server using TCP with Hello Handshake
     // publicIP: Optional (automatically resolved if empty)
     // socketType: "client" or "server"
-    socket, err := safe_socket.Create("tcp-hello", "127.0.0.1:9000", "", "client", true)
+    socket, err := safesocket.Create("tcp-hello", "127.0.0.1:9000", "", "client", true)
     if err != nil {
         log.Fatal(err)
     }
@@ -85,16 +77,16 @@ func main() {
 For more control (e.g., setting a default deadline), use `safesocket.CreateWithConfig`:
 
 ```go
-config := models.SocketConfig{
+config := safesocket.SocketConfig{
     PublicIP: "1.2.3.4",
     Deadline: 5 * time.Minute, // Idle Timeout: Connection stays alive as long as active
 }
 
 // Note: Use Deadline: 0 (or config.SetIdleTimeout(0)) for a completely open (infinite) connection.
-// This is now supported across TCP, UDP, and Shared Memory transports.
+// This is now supported across TCP, TLS, UDP, and Shared Memory transports.
 
 // CreateWithConfig(profile, address, config, type, autoConnect)
-socket, err := safe_socket.CreateWithConfig("tcp-hello", "127.0.0.1:9000", config, "server", true)
+socket, err := safesocket.CreateWithConfig("tcp-hello", "127.0.0.1:9000", config, "server", true)
 if err != nil {
     log.Fatal(err)
 }
@@ -106,6 +98,8 @@ if err != nil {
 | :--- | :--- | :--- | :--- | :--- |
 | `"tcp"` | TCP | None | `IP:Port` | Raw TCP stream. |
 | `"tcp-hello"` | TCP | Hello | `IP:Port` | TCP + Identity Handshake. |
+| `"tls"` | TLS | None | `IP:Port` | Raw TLS stream. |
+| `"tls-hello"` | TLS | Hello | `IP:Port` | TLS + Identity Handshake. |
 | `"udp"` | UDP | None | `IP:Port` | Raw UDP packets. |
 | `"udp-hello"` | UDP | Hello | `IP:Port` | **Stateless Envelope**: Wraps every packet with Identity + Payload. |
 | `"shm"` | SHM | None | File Path | Raw Memory Mapped File. |
@@ -122,7 +116,7 @@ The library is configured to "fail-fast" to ensure system health and rapid recon
 
 | Condition | Handshake Timeout | Data Deadline (Idle Timeout) | Heartbeat Interval (Auto) |
 | :--- | :--- | :--- | :--- |
-| **Network (TCP/UDP)** | 500ms | 500ms | **200ms** (or Deadline/2.5) |
+| **Network (TCP/UDP/TLS)** | 500ms | 500ms | **200ms** (or Deadline/2.5) |
 | **Local (127.0.0.1)** | 200ms | 200ms | **80ms** (or Deadline/2.5) |
 | **Shared Memory (SHM)** | 100ms | 100ms | **40ms** (or Deadline/2.5) |
 
@@ -140,7 +134,7 @@ When heartbeats are disabled due to these thresholds, a warning is printed to `s
 
 ### Protocol Details
 
--   **Hello Handshake (TCP/SHM)**: Upon connection, the client sends a `HelloMsg` (Name, Host, IP, **Dynamic Addresses**). The library automatically resolves local and remote addresses to provide full network observability. The server verifies this before allowing data exchange.
+-   **Hello Handshake (TCP/TLS/SHM)**: Upon connection, the client sends a `HelloMsg` (Name, Host, IP, **Dynamic Addresses**). The library automatically resolves local and remote addresses to provide full network observability. The server verifies this before allowing data exchange.
 -   **Stateless Envelope (UDP)**: Since UDP is connectionless, there is no "session". When using `udp-hello`, the library automatically wraps **every** packet in a lightweight `PacketEnvelope` (Sender Name + Payload). The server transparently unwraps this, so implementation code just sees the payload and knows the sender is verified.
 
 ## Advanced Usage
@@ -176,7 +170,7 @@ func runServer() {
 
 ### Accessing Peer Identity
 
-You can access the metadata exchanged during the Hello Handshake (e.g., Peer Name, Hostname, IP) by using the unified `safesocket.GetIdentity` helper. This works for both session-based (TCP/SHM) and stateless (UDP) connections without needing to import internal packages.
+You can access the metadata exchanged during the Hello Handshake (e.g., Peer Name, Hostname, IP) by using the unified `safesocket.GetIdentity` helper. This works for both session-based (TCP/TLS/SHM) and stateless (UDP) connections without needing to import internal packages.
 
 ```go
 conn, _ := server.Accept()
@@ -252,4 +246,3 @@ Since the Python wrapper uses a Go shared library, you must rebuild it using the
 ```bash
 go build -o python/safesocket/safe_socket.dll -buildmode=c-shared ./python/capi
 ```
-

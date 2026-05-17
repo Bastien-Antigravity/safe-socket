@@ -1,34 +1,29 @@
-# Future Roadmap: safe-socket
-
-## High Priority: Ecosystem Integration
-
-- [ ] **Dynamic PublicIP Management**:
-    - Implement a mechanism to refresh the `PublicIP` on connection errors.
-    - Integration with `microservice-toolbox` for network discovery.
-    - Support for `SAFE_SOCKET_PUBLIC_IP` environment variable as a source of truth.
-- [ ] **Environmental Overrides**:
-    - Allow global override of aggressive defaults via environment variables:
-        - `SAFE_SOCKET_HANDSHAKE_MS`
-        - `SAFE_SOCKET_DEADLINE_MS`
-        - `SAFE_SOCKET_HEARTBEAT_MS`
-
-## ✅ Completed (v1.9.0)
-- [x] **Infinite Wait Architecture**: Native support for `idleTimeout = 0` (Forever) across TCP, UDP, and SHM.
-- [x] **Zombie Connection Parity**: Verified detection/persistence behavior in silent-peer scenarios.
-- [x] **CAPI/Python Parity**: Full support for `set_idle_timeout` in the shared library and Python wheel.
-
-## Technical Debt & New Features
-
-- [ ] **Rust Implementation**: Create a native Rust version of the library to eliminate the Go-to-C bridge overhead in high-performance Rust microservices.
-- [ ] **Enhanced SHM**: Explore `MONITOR`/`MWAIT` polling in more detail for zero-CPU spin-wait on supported architectures.
-- [ ] **NATS Transport**: Evaluate adding a NATS-based transport for pub/sub and distributed messaging patterns.
-
 ---
+microservice: safe-socket
+type: tasks
+status: active
+tags:
+- '#service/safe-socket'
+- '#zone/3-fleet'
+---
+# TODO: safe-socket
 
-## Research Archive: Low-Latency Execution via Shared Memory
+## 🚨 High Priority (Governance Gaps)
 
-The following notes are preserved for reference from early research into cross-language execution:
+- [X] **OOM Protection**: Implement `MaxPayloadSize` check in `ReadMessage` to prevent memory exhaustion from oversized frames (FEAT-004).
+- [X] **Synchronous Shutdown**: Implement a wait-state in `Close()` to ensure all background goroutines and buffers are flushed before returning (FEAT-003).
+- [X] **Autonomous Reconnection**: Implement a retry loop with jittered exponential backoff in `SocketClient.Open` (FEAT-005).
+- [X] **Heartbeat Audit**: Audit internal protocol timings to ensure strict compliance with the **2.5x Heartbeat Safety Ratio** (Ref: 08-Networking-Protocols).
 
-- **Goal**: Minimize jitter and context switching.
-- **Challenges**: Process isolation (Segmentation Faults), ASLR, NX bit, and runtime (Go/Python) stack management.
-- **Conclusion**: OS enforcement of Virtual Memory makes direct code execution from Process A to Process B unsafe/impossible without kernel-level bypasses.
+## 🏗️ Architecture & Refactoring
+
+- [X] Refactor heartbeat logic to be profile-independent (Implemented via Facade Wrapper).
+- [X] Implement `TransportConnection` interface for all socket types.
+
+## 🧪 Testing & CI/CD
+
+- [X] Add stress tests for high-concurrency connection/disconnection.
+
+## ✅ Completed
+
+- [X] Initial BDD Spec migration.

@@ -2,40 +2,41 @@ GOCMD=go
 GOBUILD=$(GOCMD) build
 GOCLEAN=$(GOCMD) clean
 GOTEST=$(GOCMD) test
-GOGET=$(GOCMD) get
 
-CAPI_SRC=python/capi/main.go
-PYTHON_LIB_DIR=python/safesocket
-LIB_NAME=safe_socket
+LIB_DIR=safesock/libsafesocket
+LIB_NAME=libsafesocket
 
 # Detect OS
-ifeq ($(OS),Windows_NT)
-    LIB_EXT=.dll
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+    LIB_EXT = .dylib
+    LDFLAGS_SHARED = -ldflags="-extldflags=-Wl,-install_name,@rpath/$(LIB_NAME)$(LIB_EXT)"
 else
-    UNAME_S := $(shell uname -s)
-    ifeq ($(UNAME_S),Linux)
-        LIB_EXT=.so
-    endif
-    ifeq ($(UNAME_S),Darwin)
-        LIB_EXT=.dylib
-    endif
+    LIB_EXT = .so
+    LDFLAGS_SHARED = 
 endif
 
-LIB_OUT=$(PYTHON_LIB_DIR)/$(LIB_NAME)$(LIB_EXT)
-
-.PHONY: all build clean test python-build
+.PHONY: all build clean test build-lib
 
 all: build
 
-build:
-	$(GOBUILD) -o $(LIB_OUT) -buildmode=c-shared $(CAPI_SRC)
+build: build-lib
+	mkdir -p bin
+	$(GOBUILD) -o bin/ ./cmd/...
 
-python-build: build
-	cd python && python3 -m build
+build-lib:
+	mkdir -p $(LIB_DIR)
+	$(GOBUILD) $(LDFLAGS_SHARED) -buildmode=c-shared -o $(LIB_DIR)/$(LIB_NAME)$(LIB_EXT) ./cmd/libsafesocket
+
+build-dll:
+	mkdir -p $(LIB_DIR)
+	# Requires mingw-w64 for cross-compilation
+	CGO_ENABLED=1 GOOS=windows GOARCH=amd64 $(GOBUILD) -buildmode=c-shared -o $(LIB_DIR)/$(LIB_NAME).dll ./cmd/libsafesocket
 
 clean:
-	rm -f $(PYTHON_LIB_DIR)/$(LIB_NAME).*
-	rm -f $(PYTHON_LIB_DIR)/*.h
+	$(GOCLEAN)
+	rm -rf bin/
+	rm -rf $(LIB_DIR)/*.so $(LIB_DIR)/*.dylib $(LIB_DIR)/*.dll $(LIB_DIR)/*.h
 
 test:
 	$(GOTEST) -v ./...

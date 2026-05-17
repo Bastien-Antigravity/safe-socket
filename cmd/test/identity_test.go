@@ -16,14 +16,14 @@ type MockTransport struct {
 	interfaces.TransportConnection
 }
 
-func (m *MockTransport) Write(p []byte) (n int, err error) { return len(p), nil }
-func (m *MockTransport) Close() error                     { return nil }
-func (m *MockTransport) LocalAddr() net.Addr            { return nil }
-func (m *MockTransport) RemoteAddr() net.Addr           { return nil }
-func (m *MockTransport) ReadMessage() ([]byte, error)   { return nil, nil }
-func (m *MockTransport) SetDeadline(t time.Time) error  { return nil }
-func (m *MockTransport) SetReadDeadline(t time.Time) error { return nil }
-func (m *MockTransport) SetWriteDeadline(t time.Time) error { return nil }
+func (m *MockTransport) Write(p []byte) (n int, err error)    { return len(p), nil }
+func (m *MockTransport) Close() error                         { return nil }
+func (m *MockTransport) LocalAddr() net.Addr                  { return nil }
+func (m *MockTransport) RemoteAddr() net.Addr                 { return nil }
+func (m *MockTransport) ReadMessage() ([]byte, error)         { return nil, nil }
+func (m *MockTransport) SetDeadline(t time.Time) error        { return nil }
+func (m *MockTransport) SetReadDeadline(t time.Time) error    { return nil }
+func (m *MockTransport) SetWriteDeadline(t time.Time) error   { return nil }
 func (m *MockTransport) SetIdleTimeout(d time.Duration) error { return nil }
 
 func TestGetIdentity(t *testing.T) {
@@ -34,7 +34,7 @@ func TestGetIdentity(t *testing.T) {
 
 	// 1. Handshake Wrapper
 	hc := facade.NewHandshakeConnection(mock, identity)
-	
+
 	result := safesocket.GetIdentity(hc)
 	if result != identity {
 		t.Errorf("GetIdentity failed for HandshakeConnection: expected %p, got %p", identity, result)
@@ -42,7 +42,7 @@ func TestGetIdentity(t *testing.T) {
 
 	// 2. Heartbeat -> Handshake Wrapper
 	hb := facade.NewHeartbeatConnection(hc, 0)
-	defer hb.Close()
+	defer func() { _ = hb.Close() }()
 
 	result = safesocket.GetIdentity(hb)
 	if result != identity {

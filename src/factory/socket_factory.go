@@ -2,13 +2,13 @@ package factory
 
 import (
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/Bastien-Antigravity/safe-socket/src/facade"
 	"github.com/Bastien-Antigravity/safe-socket/src/interfaces"
 	"github.com/Bastien-Antigravity/safe-socket/src/models"
 	"github.com/Bastien-Antigravity/safe-socket/src/profiles"
-	"strings"
-	"time"
 )
 
 const (
@@ -81,9 +81,6 @@ func CreateWithConfig(profileName, address string, config models.SocketConfig, s
 	if config.Deadline == 0 {
 		config.Deadline = time.Duration(timeout) * time.Millisecond
 	}
-	if config.HeartbeatInterval == 0 {
-		config.HeartbeatInterval = 2 * time.Second // 2s default for high responsiveness
-	}
 
 	p, err := createProfile(profileName, address, st, timeout)
 	if err != nil {
@@ -131,6 +128,29 @@ func createProfile(profileName, address string, st interfaces.SocketType, timeou
 			return profiles.NewTcpClientProfile(identity, address, timeout), nil
 		}
 		return profiles.NewTcpServerProfile(identity, address, timeout), nil
+
+	// TLS Support (Uses TCP transport with TLS config)
+	case "tls-hello":
+		if identity == "" {
+			if st == interfaces.SocketTypeClient {
+				identity = "TlsClient-Generic"
+			} else {
+				identity = "TlsServer-Generic"
+			}
+		}
+		if st == interfaces.SocketTypeClient {
+			return profiles.NewTlsHelloClientProfile(identity, address, timeout), nil
+		}
+		return profiles.NewTlsHelloServerProfile(identity, address, timeout), nil
+
+	case "tls":
+		if identity == "" {
+			identity = "TlsRaw-Generic"
+		}
+		if st == interfaces.SocketTypeClient {
+			return profiles.NewTlsClientProfile(identity, address, timeout), nil
+		}
+		return profiles.NewTlsServerProfile(identity, address, timeout), nil
 
 	// UDP Support
 	case "udp":

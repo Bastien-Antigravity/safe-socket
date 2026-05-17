@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"sync"
+
 	"github.com/Bastien-Antigravity/safe-socket/src/interfaces"
 	"github.com/Bastien-Antigravity/safe-socket/src/models"
 	"github.com/Bastien-Antigravity/safe-socket/src/protocols"
@@ -21,7 +23,9 @@ type SocketServer struct {
 	Profile  interfaces.SocketProfile
 	Config   models.SocketConfig
 	listener interfaces.TransportListener
-	Logger   *interfaces.Logger
+	Logger   interfaces.Logger
+	wg       sync.WaitGroup
+	mu       sync.RWMutex
 }
 
 // -----------------------------------------------------------------------------
@@ -38,6 +42,9 @@ func NewSocketServer(p interfaces.SocketProfile, config models.SocketConfig) *So
 
 // Listen starts listening on the address specified by the profile.
 func (s *SocketServer) Listen() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if s.listener != nil {
 		return errors.New("server already listening")
 	}
@@ -48,12 +55,14 @@ func (s *SocketServer) Listen() error {
 	timeout := time.Duration(s.Profile.GetConnectTimeout()) * time.Millisecond
 
 	switch s.Profile.GetTransport() {
+	case interfaces.TransportTLS:
+		ln, err = transports.ListenTLS(s.Profile.GetAddress(), timeout, s.Config.CertFile, s.Config.KeyFile, s.Config.CAFile)
 	case interfaces.TransportFramedTCP:
 		ln, err = transports.Listen(s.Profile.GetAddress(), timeout)
 	case interfaces.TransportUDP:
 		ln, err = transports.ListenUDP(s.Profile.GetAddress(), timeout)
 	case interfaces.TransportShm:
-		return errors.New("SHM server listener not yet implemented")
+		ln, err = transports.ListenShm(s.Profile.GetAddress(), timeout)
 	default:
 		return errors.New("unsupported transport type for listening")
 	}
@@ -70,14 +79,25 @@ func (s *SocketServer) Listen() error {
 
 // Accept accepts a new connection and performs the handshake if defined.
 func (s *SocketServer) Accept() (interfaces.TransportConnection, error) {
-	if s.listener == nil {
+	s.mu.RLock()
+	ln := s.listener
+	s.mu.RUnlock()
+
+	if ln == nil {
 		return nil, errors.New("server not listening")
 	}
 
 	// 1. Accept raw transport connection
-	conn, err := s.listener.Accept()
+	conn, err := ln.Accept()
 	if err != nil {
 		return nil, err
+	}
+
+	// 1a. Track connection for synchronous shutdown
+	s.wg.Add(1)
+	conn = &trackingConnection{
+		TransportConnection: conn,
+		onClose:             s.wg.Done,
 	}
 
 	// 1b. Apply Server Config Deadline (Idle Timeout)
@@ -87,6 +107,11 @@ func (s *SocketServer) Accept() (interfaces.TransportConnection, error) {
 		idleTimeout = s.Config.Deadline
 	}
 	_ = conn.SetIdleTimeout(idleTimeout)
+
+	// 1c. Apply Reliability Layer if requested (UDP only)
+	if s.Config.Reliable && s.Profile.GetTransport() == interfaces.TransportUDP {
+		conn = NewReliableConnection(conn)
+	}
 
 	// 2. Encapsulation / Handshake Logic
 	// Case A: UDP + Hello (Stateless Envelope)
@@ -105,7 +130,7 @@ func (s *SocketServer) Accept() (interfaces.TransportConnection, error) {
 		// Note: The handshake itself will respect the Deadline set in 1b because it uses Read/Write on the conn.
 		helloMsg, err := proto.WaitInitiation(conn)
 		if err != nil {
-			conn.Close()
+			_ = conn.Close()
 			return nil, err
 		}
 
@@ -114,42 +139,51 @@ func (s *SocketServer) Accept() (interfaces.TransportConnection, error) {
 	}
 
 	// 3. Heartbeat Optimization & Safety Ratio
-	if s.Config.HeartbeatInterval == 0 {
-		// Calculate optimal heartbeat (IdleTimeout / 2.5)
-		heartbeat := time.Duration(float64(idleTimeout) / 2.5)
-
-		// Threshold Check (Network: 300ms, Local: 150ms, SHM: 50ms)
-		threshold := 300 * time.Millisecond // Default (Networking)
-		addr := s.Profile.GetAddress()
-		isLocal := strings.Contains(addr, "127.0.0.1") || strings.Contains(addr, "localhost")
-		isShm := s.Profile.GetTransport() == interfaces.TransportShm
-
-		transportName := "networking"
-		if isShm {
-			threshold = 50 * time.Millisecond
-			transportName = "shared memory"
-		} else if isLocal {
-			threshold = 150 * time.Millisecond
-			transportName = "local"
+	heartbeatInterval := s.Config.HeartbeatInterval
+	if heartbeatInterval == 0 {
+		heartbeatInterval = time.Duration(float64(idleTimeout) / 2.5)
+	} else if idleTimeout > 0 && float64(heartbeatInterval)*2.5 > float64(idleTimeout) {
+		// If user provided an unsafe heartbeat (too close to deadline), adjust it
+		newHeartbeat := time.Duration(float64(idleTimeout) / 2.5)
+		if s.Logger != nil {
+			s.Logger.Warning(fmt.Sprintf("User HeartbeatInterval (%v) is too close to IdleTimeout (%v). Adjusting to safety ratio: %v",
+				heartbeatInterval, idleTimeout, newHeartbeat))
 		}
-
-		if idleTimeout < threshold {
-			fmt.Printf("Heartbeat disabled: IdleTimeout (%dms) is below the threshold for %s transport. Connection will close if inactive.\n", idleTimeout.Milliseconds(), transportName)
-			// Return a HeartbeatConnection with interval 0 (disabled)
-			return NewHeartbeatConnection(conn, 0), nil
-		} else {
-			// Effective heartbeat for this connection
-			return NewHeartbeatConnection(conn, heartbeat), nil
-		}
+		heartbeatInterval = newHeartbeat
 	}
 
-	return NewHeartbeatConnection(conn, s.Config.HeartbeatInterval), nil
+	// Threshold Check (Network: 300ms, Local: 150ms, SHM: 50ms)
+	threshold := 300 * time.Millisecond // Default (Networking)
+	addr := s.Profile.GetAddress()
+	isLocal := strings.Contains(addr, "127.0.0.1") || strings.Contains(addr, "localhost")
+	isShm := s.Profile.GetTransport() == interfaces.TransportShm
+
+	transportName := "networking"
+	if isShm {
+		threshold = 50 * time.Millisecond
+		transportName = "shared memory"
+	} else if isLocal {
+		threshold = 150 * time.Millisecond
+		transportName = "local"
+	}
+
+	if idleTimeout > 0 && idleTimeout < threshold {
+		if s.Logger != nil {
+			s.Logger.Info(fmt.Sprintf("Heartbeat disabled: IdleTimeout (%v) is below the threshold for %s transport.", idleTimeout, transportName))
+		}
+		return NewHeartbeatConnection(conn, 0), nil
+	}
+
+	return NewHeartbeatConnection(conn, heartbeatInterval), nil
 }
 
 // -----------------------------------------------------------------------------
 
 // GetAddr returns the listener's network address, if the server is listening.
 func (s *SocketServer) GetAddr() (string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	if s.listener == nil {
 		return "", errors.New("server not listening")
 	}
@@ -158,20 +192,45 @@ func (s *SocketServer) GetAddr() (string, error) {
 
 // -----------------------------------------------------------------------------
 
-// Close stops the server.
+// Close stops the server and optionally waits for all active connections to finish.
+// Set Config.Deadline to a positive value to limit the wait time (not yet implemented for WG wait).
 func (s *SocketServer) Close() error {
-	if s.listener != nil {
-		err := s.listener.Close()
-		s.listener = nil
+	s.mu.Lock()
+	ln := s.listener
+	s.listener = nil
+	s.mu.Unlock()
+
+	if ln != nil {
+		err := ln.Close()
+
+		// Wait for active connections to finish
+		s.wg.Wait()
+
 		return err
 	}
 	return nil
 }
 
+// trackingConnection wraps a TransportConnection to signal when it's closed.
+type trackingConnection struct {
+	interfaces.TransportConnection
+	onClose func()
+	once    sync.Once
+}
+
+func (c *trackingConnection) Close() error {
+	var err error
+	c.once.Do(func() {
+		err = c.TransportConnection.Close()
+		c.onClose()
+	})
+	return err
+}
+
 // -----------------------------------------------------------------------------
 
 // Bind logger to safe-socket
-func (s *SocketServer) SetLogger(logger *interfaces.Logger) {
+func (s *SocketServer) SetLogger(logger interfaces.Logger) {
 	s.Logger = logger
 }
 

@@ -5,6 +5,7 @@ type TransportType string
 
 const (
 	TransportFramedTCP TransportType = "FramedTCP"
+	TransportTLS       TransportType = "TLS"
 	TransportShm       TransportType = "SharedMemory"
 	TransportUDP       TransportType = "UDP"
 )

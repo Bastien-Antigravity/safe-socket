@@ -1,0 +1,11 @@
+[package]
+name = "safesocket"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.91"
+authors = ["Bastien-Antigravity"]
+description = "Rust wrapper for the Safe Socket CGO bridge"
+
+[dependencies]
+libc = "0.2"
+libloading = "0.8"
