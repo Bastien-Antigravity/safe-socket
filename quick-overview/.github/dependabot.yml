@@ -1,4 +1,4 @@
-# [FLEET-ARCHITECT] Standardized Polyglot Dependabot
+# [FLEET-ARCHITECT] Standardized Dependabot
 # Sync-ID: 2026-05-11-GLOBAL-001
 version: 2
 updates:
@@ -6,16 +6,19 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      go-dependencies:
+        patterns:
+          - "*"
 
   - package-ecosystem: "pip"
-    directory: "/{{PYTHON_DIR}}"
+    directory: "/"
     schedule:
       interval: "weekly"
-
-  - package-ecosystem: "cargo"
-    directory: "/{{RUST_DIR}}"
-    schedule:
-      interval: "weekly"
+    groups:
+      python-dependencies:
+        patterns:
+          - "*"
 
   - package-ecosystem: "github-actions"
     directory: "/"
