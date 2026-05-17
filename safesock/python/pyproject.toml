@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "safe-socket"
-version = "0.1.0"
+version = "0.0.1"
 description = "Python bindings for the safe-socket Go library"
 readme = "README.md"
 authors = [
@@ -28,4 +28,3 @@ include = ["safesocket*"]
 
 [tool.setuptools.package-data]
 safesocket = ["*.so", "*.dylib", "*.dll"]
-

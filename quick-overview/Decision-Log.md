@@ -12,7 +12,7 @@ tags:
 
 Historical record of significant architectural and technical decisions for `safe-socket`.
 
-- **v1.10.0 (2026-05-17)**: Hardened repository stability and thread-safety.
+- **v0.0.1 (2026-05-17)**: Hardened repository stability and thread-safety.
     - **Thread-Safety**: Implemented mutex protection in `HeartbeatConnection` to prevent race conditions during concurrent I/O.
     - **Robust Recovery**: Added jittered exponential backoff to `SocketClient.Open` for autonomous reconnection.
     - **Configuration Compliance**: Removed direct environment variable overrides (`SAFE_SOCKET_*`) to align with the ecosystem's centralized configuration standards (Rule 3/7).
