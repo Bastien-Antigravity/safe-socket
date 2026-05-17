@@ -1,3 +1,0 @@
-# Restrict CI/CD and Dependabot files to the Architect team
-/.github/workflows/ @Bastien-Antigravity/fleet-architects
-/.github/dependabot.yml @Bastien-Antigravity/fleet-architects
