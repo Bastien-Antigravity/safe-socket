@@ -77,6 +77,10 @@ go.work
 go.work.sum
 __debug_*
 
+# Subdirectory Binaries
+safesock/cpp/examples/matrix_client
+safesock/cpp/examples/basic_usage
+
 # Rust
 target/
 **/*.rs.bk
