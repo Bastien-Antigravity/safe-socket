@@ -186,63 +186,74 @@ if identity != nil {
 > For UDP (`udp-hello`), the identity is only available **after** the first packet has been successfully read, as it is extracted from the packet envelope.
 
 
-## Python Bindings
+## Polyglot SDK Bindings
 
-`safe-socket` is also available as a Python library, providing the same high-level API.
+The core Go engine is exposed via a CGO shared library (`libsafesocket`), providing high-level, object-oriented wrappers for other languages. The bindings are maintained in the [safesock/](safesock) folder.
 
-### Installation
-
-You can install it directly from the GitHub repository:
-
-```bash
-pip install git+https://github.com/Bastien-Antigravity/safe-socket.git#egg=safe-socket&subdirectory=python
-```
-
-*Note: Ensure you have Go installed on your system as it is required to compile the underlying shared library during installation.*
-
-
-Or download a pre-built wheel from [GitHub Releases](https://github.com/Bastien-Antigravity/safe-socket/releases) and install it:
-
-```bash
-# Example for a downloaded wheel
-pip install safe_socket-<VERSION>-py3-none-any.whl
-```
-
-### Usage Example
+### 🐍 Python SDK ([safesock/python](safesock/python))
 
 ```python
 from safesocket import safesocket
 
-# 1. Simple creation (uses responsive defaults)
-# public_ip is optional.
+# Create a client and send/receive data
 with safesocket.create(profile_name="tcp-hello", address="127.0.0.1:9000") as client:
     client.open()
     client.send(b"Hello from Python!")
     response = client.receive()
     print(f"Received: {response.decode()}")
-
-# 2. Advanced creation (custom configuration)
-config = safesocket.SocketConfig(deadline_ms=500, heartbeat_interval_ms=1000)
-with safesocket.create_with_config("tcp-hello", "0.0.0.0:9000", config, socket_type="server") as server:
-    server.listen()
-    conn = server.accept()
-    with conn:
-        data = conn.receive()
-        conn.send(b"Echo: " + data)
-
-# 3. Infinite Wait (Forever)
-# Disables the internal idle timer entirely
-with safesocket.create("tcp-hello", "127.0.0.1:9000") as client:
-    client.open()
-    client.set_idle_timeout(0)
-    # This will now block indefinitely until data arrives or the OS kills the socket
-    data = client.receive()
 ```
 
-## Compilation Note
+### 🦀 Rust SDK ([safesock/rust](safesock/rust))
 
-Since the Python wrapper uses a Go shared library, you must rebuild it using the C-bridge if the source code or API changes:
+```rust
+use safesocket::SafeSocket;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut client = SafeSocket::new("tcp-hello", "127.0.0.1:9000", None, "client", true, "libsafesocket.so")?;
+    client.send(b"Hello from Rust")?;
+    let response = client.receive(1024)?;
+    println!("Received: {:?}", response);
+    Ok(())
+}
+```
+
+### 💧 C++ SDK ([safesock/cpp](safesock/cpp))
+
+```cpp
+#include "SafeSocket.hpp"
+
+int main() {
+    try {
+        auto client = safesock::create("tcp-hello", "127.0.0.1:9000", "", "client", true);
+        client->send({ 'H', 'e', 'l', 'l', 'o' });
+        auto response = client->receive(1024);
+    } catch (const safesock::SafeSocketError& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+    }
+    return 0;
+}
+```
+
+### 📊 VBA SDK ([safesock/vba](safesock/vba))
+
+```vba
+' VBA example to connect and send data
+Dim handle As Long
+handle = SafeSocket_Create("tcp-hello", "127.0.0.1:9000", "", "client", 1)
+If handle <> -1 Then
+    Dim data() As Byte
+    data = StrConv("Hello from VBA", vbFromUnicode)
+    SafeSocket_Send handle, data(0), UBound(data) + 1
+    SafeSocket_Close handle
+End If
+```
+
+### Rebuilding the CGO Bridge
+
+If the Go source code or API changes, you must rebuild the shared library:
 
 ```bash
-go build -o python/safesocket/safe_socket.dll -buildmode=c-shared ./python/capi
+make build-lib
 ```
+
+This generates `libsafesocket.so`, `libsafesocket.dylib`, or `libsafesocket.dll` under `safesock/libsafesocket/`.

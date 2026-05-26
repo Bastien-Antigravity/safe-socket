@@ -39,6 +39,7 @@ tags:
 - [x] **Polyglot SDK Refactoring**: Moved CGO bridge to `src/cgo_bridge`, created Rust, C++, and VBA bindings, and refactored Python to ecosystem standards.
 - [x] **Fleet Verification (2026-05-15)**: Resolved toolchain drift (Python 3.12, Rust 1.91, C++20) and integrated `Brain-Health-Audit.py` as a blocking CI gate.
 - [x] **CI Expansion**: Enabled parallel polyglot testing for Python and Rust SDKs in `ci.yml`.
+- [x] **Polyglot Docs Parity**: Replaced outdated Python-only installation/usage section in root `README.md` with comprehensive usage examples for all SDK bindings (Python, Rust, C++, VBA).
 - [x] **Documentation Audit (v1.9.0-Final)**: Consolidated documentation into `quick-overview/` and added missing `Map-of-Content.md`, `Governance.md`, and `Decision-Log.md` for full ecosystem parity.
 
 ### 📚 DOCUMENTATION AUDIT (DocMaintainer) - 2026-05-15
@@ -58,6 +59,14 @@ tags:
     - Reverted `ci_essai.yml` back to `ci.yml`.
     - Finalized documentation and metadata audit.
 - **Status**: ✅ CI Restored. Repository synchronized with ecosystem standards.
+
+### 📚 POLYGLOT DOCS SYNC - 2026-05-26
+- **Objective**: Ensure root README.md has correct build/usage details and does not favor one language over the others.
+- **Actions**:
+    - Replaced outdated Python-only installation instructions and compilation commands with a unified "Polyglot SDK Bindings" section.
+    - Added brief usage examples in the root README.md for Python, Rust, C++, and VBA.
+    - Updated building instructions to reflect ecosystem-wide usage of `make build-lib`.
+- **Status**: ✅ Parity achieved. Root README.md now correctly reflects all SDK bindings.
 
 ## 🐛 Local Issues / Bugs
 - None identified.
