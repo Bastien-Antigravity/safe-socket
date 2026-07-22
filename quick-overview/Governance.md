@@ -6,8 +6,9 @@ tags:
 - '#service/safe-socket'
 - '#ai/ignore'
 - '#zone/3-fleet'
+- '#type/governance'
+- '#state/active'
 ---
-
 # Governance
 
 This document outlines the Behavior-Driven Development (BDD) specifications for the `safe-socket` library.

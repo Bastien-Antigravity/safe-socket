@@ -2,6 +2,12 @@
 tags:
 - '#ai/ignore'
 - '#zone/3-fleet'
+- '#service/safe-socket'
+- '#type/overview'
+- '#state/active'
+microservice: safe-socket
+type: overview
+status: active
 ---
 # Architecture Overview
 

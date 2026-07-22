@@ -77,7 +77,7 @@ type (
 // -----------------------------------------------------------------------------
 
 // Explicitly export Transport/Protocol constants via variables or just let users import interfaces?
-// For a simple lib, letting them import "https://github.com/toto1234567890/safe-socket/src/interfaces" is okay,
+// For a simple lib, letting them import "https://github.com/Bastien-Antigravity/safe-socket/src/interfaces" is okay,
 // but aliasing commonly used ones is nicer.
 
 const (

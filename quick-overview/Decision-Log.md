@@ -6,8 +6,9 @@ tags:
 - '#service/safe-socket'
 - '#ai/ignore'
 - '#zone/3-fleet'
+- '#type/decision-log'
+- '#state/active'
 ---
-
 # Decision Log
 
 Historical record of significant architectural and technical decisions for `safe-socket`.

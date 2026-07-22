@@ -6,8 +6,9 @@ tags:
 - '#service/safe-socket'
 - '#ai/ignore'
 - '#zone/3-fleet'
+- '#type/documentation'
+- '#state/active'
 ---
-
 # 🗺️ Ecosystem Map: safe-socket (MOC)
 
 This is the primary Map of Content (MOC) for the `safe-socket` repository. It provides a structured index of all high-level documentation and architectural specifications.

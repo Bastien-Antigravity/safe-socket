@@ -33,9 +33,16 @@ impl Default for SocketConfig {
 
 impl SafeSocket {
     pub fn new(profile_name: &str, address: &str, config: Option<SocketConfig>, socket_type: &str, auto_connect: bool, lib_path: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        // Prioritize LIBSAFESOCKET_PATH environment variable if defined
+        let env_path = std::env::var("LIBSAFESOCKET_PATH");
+        let resolved_path = match &env_path {
+            Ok(path) if !path.is_empty() => path.as_str(),
+            _ => lib_path,
+        };
+
         // We use a static reference and leak the library because Go's runtime 
         // does not support being unloaded (dlclose) and will hang.
-        let lib = Box::leak(Box::new(unsafe { Library::new(lib_path)? }));
+        let lib = Box::leak(Box::new(unsafe { Library::new(resolved_path)? }));
         let config = config.unwrap_or_default();
         
         let handle = unsafe {

@@ -25,8 +25,10 @@ func NewUdpSocket(conn *net.UDPConn, timeout time.Duration) *UdpSocket {
 		Conn:        conn,
 		idleTimeout: timeout,
 	}
-	s.refreshReadDeadline()
-	s.refreshWriteDeadline()
+	if conn != nil {
+		s.refreshReadDeadline()
+		s.refreshWriteDeadline()
+	}
 	return s
 }
 
@@ -38,19 +40,21 @@ func NewTransientUdpSocket(conn *net.UDPConn, addr *net.UDPAddr, data []byte, ti
 		RecvBuf:             data,
 		idleTimeout:         timeout,
 	}
-	s.refreshReadDeadline()
-	s.refreshWriteDeadline()
+	if conn != nil {
+		s.refreshReadDeadline()
+		s.refreshWriteDeadline()
+	}
 	return s
 }
 
 func (s *UdpSocket) refreshReadDeadline() {
-	if s.idleTimeout > 0 {
+	if s.idleTimeout > 0 && s.Conn != nil {
 		_ = s.Conn.SetReadDeadline(time.Now().Add(s.idleTimeout))
 	}
 }
 
 func (s *UdpSocket) refreshWriteDeadline() {
-	if s.idleTimeout > 0 {
+	if s.idleTimeout > 0 && s.Conn != nil {
 		_ = s.Conn.SetWriteDeadline(time.Now().Add(s.idleTimeout))
 	}
 }
@@ -58,6 +62,9 @@ func (s *UdpSocket) refreshWriteDeadline() {
 // SetIdleTimeout updates the internal idle timeout and refreshes current deadlines.
 func (s *UdpSocket) SetIdleTimeout(d time.Duration) error {
 	s.idleTimeout = d
+	if s.Conn == nil {
+		return nil
+	}
 	if d == 0 {
 		// Clear deadlines once and for all for 'forever' mode
 		_ = s.Conn.SetDeadline(time.Time{})
@@ -75,7 +82,9 @@ func (s *UdpSocket) SetIdleTimeout(d time.Duration) error {
 // Messages larger than 64KB will fail.
 func (s *UdpSocket) Write(p []byte) (n int, err error) {
 	s.refreshWriteDeadline()
-	// OPTIMIZATION: Removed SetWriteDeadline logic from hot path.
+	if s.Conn == nil {
+		return 0, net.ErrClosed
+	}
 
 	// If this is a transient server socket, reply to the specific remote address
 	if s.TransientRemoteAddr != nil {
@@ -99,7 +108,9 @@ func (s *UdpSocket) Read(p []byte) (n int, err error) {
 		return n, nil
 	}
 
-	// OPTIMIZATION: Removed SetReadDeadline logic from hot path.
+	if s.Conn == nil {
+		return 0, net.ErrClosed
+	}
 	return s.Conn.Read(p)
 }
 
@@ -117,7 +128,9 @@ func (s *UdpSocket) ReadMessage() ([]byte, error) {
 		return result, nil
 	}
 
-	// OPTIMIZATION: Removed SetReadDeadline logic from hot path.
+	if s.Conn == nil {
+		return nil, net.ErrClosed
+	}
 
 	// Max UDP packet size is technically ~65535.
 	// We allocate a temp buffer.
@@ -151,6 +164,9 @@ func (s *UdpSocket) Close() error {
 
 // SetDeadline sets the read and write deadlines.
 func (s *UdpSocket) SetDeadline(t time.Time) error {
+	if s.Conn == nil {
+		return nil
+	}
 	return s.Conn.SetDeadline(t)
 }
 
@@ -158,6 +174,9 @@ func (s *UdpSocket) SetDeadline(t time.Time) error {
 
 // SetReadDeadline sets the read deadline.
 func (s *UdpSocket) SetReadDeadline(t time.Time) error {
+	if s.Conn == nil {
+		return nil
+	}
 	return s.Conn.SetReadDeadline(t)
 }
 
@@ -165,6 +184,9 @@ func (s *UdpSocket) SetReadDeadline(t time.Time) error {
 
 // SetWriteDeadline sets the write deadline.
 func (s *UdpSocket) SetWriteDeadline(t time.Time) error {
+	if s.Conn == nil {
+		return nil
+	}
 	return s.Conn.SetWriteDeadline(t)
 }
 
@@ -172,6 +194,9 @@ func (s *UdpSocket) SetWriteDeadline(t time.Time) error {
 
 // LocalAddr returns the local network address.
 func (s *UdpSocket) LocalAddr() net.Addr {
+	if s.Conn == nil {
+		return nil
+	}
 	return s.Conn.LocalAddr()
 }
 
@@ -181,6 +206,9 @@ func (s *UdpSocket) LocalAddr() net.Addr {
 func (s *UdpSocket) RemoteAddr() net.Addr {
 	if s.TransientRemoteAddr != nil {
 		return s.TransientRemoteAddr
+	}
+	if s.Conn == nil {
+		return nil
 	}
 	return s.Conn.RemoteAddr()
 }

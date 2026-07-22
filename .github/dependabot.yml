@@ -8,12 +8,12 @@ updates:
       interval: "weekly"
 
   - package-ecosystem: "pip"
-    directory: "/{{PYTHON_DIR}}"
+    directory: "/safesock/python"
     schedule:
       interval: "weekly"
 
   - package-ecosystem: "cargo"
-    directory: "/{{RUST_DIR}}"
+    directory: "/safesock/rust"
     schedule:
       interval: "weekly"
 

@@ -39,17 +39,19 @@ if sysPlatform == "darwin":
 elif sysPlatform == "win32":
     _lib_ext = ".dll"
 
-_lib_path = None
-for path in _search_paths:
-    full_path = osPath.join(path, f"{_lib_name}{_lib_ext}")
-    if osPath.exists(full_path):
-        _lib_path = full_path
-        break
+_lib_path = osGetenv("LIBSAFESOCKET_PATH")
+if _lib_path and osPath.exists(_lib_path):
+    pass
+else:
+    _lib_path = None
+    for path in _search_paths:
+        full_path = osPath.join(path, f"{_lib_name}{_lib_ext}")
+        if osPath.exists(full_path):
+            _lib_path = full_path
+            break
 
 if not _lib_path:
-    _lib_path = osGetenv("LIBSAFESOCKET_PATH")
-    if not _lib_path or not osPath.exists(_lib_path):
-         raise FileNotFoundError(f"SafeSocket (Python): Shared library {_lib_name}{_lib_ext} not found. Please run 'make build-lib' first.")
+     raise FileNotFoundError(f"SafeSocket (Python): Shared library {_lib_name}{_lib_ext} not found. Please check paths or set LIBSAFESOCKET_PATH.")
 
 lib = ctypesCDLL(_lib_path)
 

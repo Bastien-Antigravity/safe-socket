@@ -24,26 +24,26 @@ type FramedTCPSocket struct {
 func NewFramedTCPSocket(conn net.Conn, timeout time.Duration) *FramedTCPSocket {
 	s := &FramedTCPSocket{
 		Conn:        conn,
-		reader:      bufio.NewReader(conn),
 		idleTimeout: timeout,
 	}
 
-	// We no longer set a one-time absolute deadline here.
-	// Instead, the first Read/Write will refresh it if idleTimeout > 0.
-	s.refreshReadDeadline()
-	s.refreshWriteDeadline()
+	if conn != nil {
+		s.reader = bufio.NewReader(conn)
+		s.refreshReadDeadline()
+		s.refreshWriteDeadline()
+	}
 
 	return s
 }
 
 func (s *FramedTCPSocket) refreshReadDeadline() {
-	if s.idleTimeout > 0 {
+	if s.idleTimeout > 0 && s.Conn != nil {
 		_ = s.Conn.SetReadDeadline(time.Now().Add(s.idleTimeout))
 	}
 }
 
 func (s *FramedTCPSocket) refreshWriteDeadline() {
-	if s.idleTimeout > 0 {
+	if s.idleTimeout > 0 && s.Conn != nil {
 		_ = s.Conn.SetWriteDeadline(time.Now().Add(s.idleTimeout))
 	}
 }
@@ -51,6 +51,9 @@ func (s *FramedTCPSocket) refreshWriteDeadline() {
 // SetIdleTimeout updates the internal idle timeout and refreshes current deadlines.
 func (s *FramedTCPSocket) SetIdleTimeout(d time.Duration) error {
 	s.idleTimeout = d
+	if s.Conn == nil {
+		return nil
+	}
 	if d == 0 {
 		// Clear deadlines once and for all for 'forever' mode
 		_ = s.Conn.SetDeadline(time.Time{})
@@ -65,6 +68,9 @@ func (s *FramedTCPSocket) SetIdleTimeout(d time.Duration) error {
 
 // SetKeepAlive enables TCP keepalive with the specified period.
 func (s *FramedTCPSocket) SetKeepAlive(period time.Duration) error {
+	if s.Conn == nil {
+		return nil
+	}
 	if tcpConn, ok := s.Conn.(*net.TCPConn); ok {
 		if err := tcpConn.SetKeepAlive(true); err != nil {
 			return err
@@ -78,6 +84,9 @@ func (s *FramedTCPSocket) SetKeepAlive(period time.Duration) error {
 
 // SetNoDelay controls Nagle's algorithm (true = disable Nagle, lower latency).
 func (s *FramedTCPSocket) SetNoDelay(enabled bool) error {
+	if s.Conn == nil {
+		return nil
+	}
 	if tcpConn, ok := s.Conn.(*net.TCPConn); ok {
 		return tcpConn.SetNoDelay(enabled)
 	}
@@ -88,6 +97,9 @@ func (s *FramedTCPSocket) SetNoDelay(enabled bool) error {
 
 // SetReadBuffer sets the size of the operating system's receive buffer.
 func (s *FramedTCPSocket) SetReadBuffer(bytes int) error {
+	if s.Conn == nil {
+		return nil
+	}
 	if tcpConn, ok := s.Conn.(*net.TCPConn); ok {
 		return tcpConn.SetReadBuffer(bytes)
 	}
@@ -98,6 +110,9 @@ func (s *FramedTCPSocket) SetReadBuffer(bytes int) error {
 
 // SetWriteBuffer sets the size of the operating system's transmit buffer.
 func (s *FramedTCPSocket) SetWriteBuffer(bytes int) error {
+	if s.Conn == nil {
+		return nil
+	}
 	if tcpConn, ok := s.Conn.(*net.TCPConn); ok {
 		return tcpConn.SetWriteBuffer(bytes)
 	}
@@ -108,6 +123,9 @@ func (s *FramedTCPSocket) SetWriteBuffer(bytes int) error {
 
 // SetDeadline sets the read and write deadlines associated with the connection.
 func (s *FramedTCPSocket) SetDeadline(t time.Time) error {
+	if s.Conn == nil {
+		return nil
+	}
 	return s.Conn.SetDeadline(t)
 }
 
@@ -115,6 +133,9 @@ func (s *FramedTCPSocket) SetDeadline(t time.Time) error {
 
 // SetReadDeadline sets the deadline for future Read calls.
 func (s *FramedTCPSocket) SetReadDeadline(t time.Time) error {
+	if s.Conn == nil {
+		return nil
+	}
 	return s.Conn.SetReadDeadline(t)
 }
 
@@ -122,6 +143,9 @@ func (s *FramedTCPSocket) SetReadDeadline(t time.Time) error {
 
 // SetWriteDeadline sets the deadline for future Write calls.
 func (s *FramedTCPSocket) SetWriteDeadline(t time.Time) error {
+	if s.Conn == nil {
+		return nil
+	}
 	return s.Conn.SetWriteDeadline(t)
 }
 
@@ -130,6 +154,9 @@ func (s *FramedTCPSocket) SetWriteDeadline(t time.Time) error {
 // Write prepends length and writes data.
 func (s *FramedTCPSocket) Write(p []byte) (n int, err error) {
 	s.refreshWriteDeadline()
+	if s.Conn == nil {
+		return 0, io.ErrClosedPipe
+	}
 
 	// 1. Prepare Header (4 bytes length)Endian)
 	header := make([]byte, 4)
@@ -153,6 +180,9 @@ func (s *FramedTCPSocket) Write(p []byte) (n int, err error) {
 func (s *FramedTCPSocket) Read(p []byte) (n int, err error) {
 	for {
 		s.refreshReadDeadline()
+		if s.Conn == nil || s.reader == nil {
+			return 0, io.EOF
+		}
 		// 1. Peek content check
 		// We need 4 bytes for header.
 		header, err := s.reader.Peek(4)
@@ -198,6 +228,9 @@ func (s *FramedTCPSocket) Read(p []byte) (n int, err error) {
 func (s *FramedTCPSocket) ReadMessage() ([]byte, error) {
 	for {
 		s.refreshReadDeadline()
+		if s.Conn == nil || s.reader == nil {
+			return nil, io.EOF
+		}
 		// 1. Read Length
 		header := make([]byte, 4)
 		if _, err := io.ReadFull(s.reader, header); err != nil {
@@ -230,6 +263,9 @@ func (s *FramedTCPSocket) ReadMessage() ([]byte, error) {
 // -----------------------------------------------------------------------------
 
 func (s *FramedTCPSocket) Close() error {
+	if s.Conn == nil {
+		return nil
+	}
 	return s.Conn.Close()
 }
 
@@ -237,6 +273,9 @@ func (s *FramedTCPSocket) Close() error {
 
 // LocalAddr returns the local network address.
 func (s *FramedTCPSocket) LocalAddr() net.Addr {
+	if s.Conn == nil {
+		return nil
+	}
 	return s.Conn.LocalAddr()
 }
 
@@ -244,5 +283,8 @@ func (s *FramedTCPSocket) LocalAddr() net.Addr {
 
 // RemoteAddr returns the remote network address.
 func (s *FramedTCPSocket) RemoteAddr() net.Addr {
+	if s.Conn == nil {
+		return nil
+	}
 	return s.Conn.RemoteAddr()
 }
