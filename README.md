@@ -7,6 +7,8 @@ tags:
 - '#service/safe-socket'
 - '#domain/networking'
 - '#zone/3-fleet'
+- '#type/repository'
+- '#state/active'
 ---
 
 # Safe Socket

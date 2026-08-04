@@ -5,6 +5,8 @@ status: active
 tags:
 - '#service/safe-socket'
 - '#zone/3-fleet'
+- '#type/tasks'
+- '#state/active'
 ---
 # TODO: safe-socket
 

@@ -2,6 +2,11 @@
 microservice: safe-socket
 type: governance
 status: active
+tags:
+- '#service/safe-socket'
+- '#type/governance'
+- '#state/active'
+- '#zone/3-fleet'
 ---
 
 # ⚡ AI Initialization: safe-socket

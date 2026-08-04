@@ -5,6 +5,8 @@ status: active
 tags:
 - '#service/safe-socket'
 - '#zone/3-fleet'
+- '#type/dna'
+- '#state/active'
 ---
 # 🧬 Project DNA: safe-socket
 
