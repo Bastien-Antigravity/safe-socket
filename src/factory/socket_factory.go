@@ -9,6 +9,7 @@ import (
 	"github.com/Bastien-Antigravity/safe-socket/src/interfaces"
 	"github.com/Bastien-Antigravity/safe-socket/src/models"
 	"github.com/Bastien-Antigravity/safe-socket/src/profiles"
+	"github.com/Bastien-Antigravity/safe-socket/src/utils"
 )
 
 const (
@@ -64,9 +65,7 @@ func CreateWithConfig(profileName, address string, config models.SocketConfig, s
 	// 2. Determine Timeout
 	timeout := int(config.HandshakeTimeout.Milliseconds())
 	if timeout <= 0 {
-		isLocal := strings.Contains(address, "localhost") ||
-			strings.Contains(address, "127.0.0.1") ||
-			strings.Contains(address, "::1")
+		isLocal := utils.GetMachineDetector().IsLocalAddress(address)
 
 		if strings.HasPrefix(profileKey, "shm") {
 			timeout = DefaultShmHandshakeTimeout
@@ -105,6 +104,37 @@ func createProfile(profileName, address string, st interfaces.SocketType, timeou
 	}
 
 	switch profileKey {
+	// Intelligent auto-encryption profile: selects plain TCP for local machine, TLS for remote machine
+	case "auto-hello", "auto":
+		detector := utils.GetMachineDetector()
+		isLocal := detector.IsLocalAddress(address)
+
+		if isLocal {
+			if identity == "" {
+				if st == interfaces.SocketTypeClient {
+					identity = "TcpClient-Generic"
+				} else {
+					identity = "TcpServer-Generic"
+				}
+			}
+			if st == interfaces.SocketTypeClient {
+				return profiles.NewTcpHelloClientProfile(identity, address, timeout), nil
+			}
+			return profiles.NewTcpHelloServerProfile(identity, address, timeout), nil
+		} else {
+			if identity == "" {
+				if st == interfaces.SocketTypeClient {
+					identity = "TlsClient-Generic"
+				} else {
+					identity = "TlsServer-Generic"
+				}
+			}
+			if st == interfaces.SocketTypeClient {
+				return profiles.NewTlsHelloClientProfile(identity, address, timeout), nil
+			}
+			return profiles.NewTlsHelloServerProfile(identity, address, timeout), nil
+		}
+
 	case "tcp-hello":
 		// Default identities must be non-empty strings for identity-aware transports
 		if identity == "" {

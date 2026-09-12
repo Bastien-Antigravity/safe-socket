@@ -11,6 +11,10 @@ type SocketConfig struct {
 	// PublicIP is the external IP address of this node, provided by the application.
 	PublicIP string
 
+	// ServiceAddress is the advertised inbound listening address of this service (e.g. "127.0.0.2:1026").
+	// When provided, it is transmitted in the handshake FromAddress to enable dynamic service discovery.
+	ServiceAddress string
+
 	// Deadline is the default timeout for read/write operations on accepted connections.
 	// If set to 0, no deadline is applied by default (server stays open/blocking).
 	// This only applies to the *server* when accepting a new connection.

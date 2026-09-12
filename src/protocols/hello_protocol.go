@@ -45,10 +45,15 @@ func (p *HelloProtocol) Initiate(conn interfaces.TransportConnection, profile in
 	localAddr := conn.LocalAddr().String()
 	remoteAddr := conn.RemoteAddr().String()
 
+	advertisedAddr := localAddr
+	if config.ServiceAddress != "" {
+		advertisedAddr = config.ServiceAddress
+	}
+
 	_ = helloMsg.SetFromName(appName)
 	_ = helloMsg.SetFromHost(hostname)
-	_ = helloMsg.SetFromAddress(localAddr) // Actual bound address
-	_ = helloMsg.SetToAddress(remoteAddr)  // Target address
+	_ = helloMsg.SetFromAddress(advertisedAddr) // Advertised inbound service address
+	_ = helloMsg.SetToAddress(remoteAddr)       // Target address
 	_ = helloMsg.SetFromPublicIP(publicIP)
 
 	// Marshal to bytes

@@ -19,7 +19,8 @@ status: active
     -   **UDP**: High-speed, connectionless communication with optional reliability layers.
     -   **Shared Memory (SHM)**: Ultra-low latency IPC for local processes using memory-mapped files (Ring Buffer).
 -   **Intelligent Protocols**:
-    -   **Hello Protocol**: Identity exchange handshake.
+    -   **Auto-Encryption**: Automatically detects local vs remote machines using `MachineDetector`, switching seamlessly between unencrypted framed TCP (zero CPU overhead) and TLS without modifying client application code.
+    -   **Hello Protocol**: Identity exchange handshake with dynamic service address advertising (`ServiceAddress`) for automated peer discovery.
     -   **Stateless Envelope (UDP)**: Zero-handshake authentication where every packet carries the sender's identity and payload.
 -   **Unified Facade**: Interact with any transport using `Open()`, `Close()`, `Send()`, `Receive()`, and `Accept()`.
 - **Aggressive Responsiveness**: Optimized for high-frequency microservice environments with extremely tight default timeouts (500ms network / 100ms SHM) and an active activity-refresh deadline model.

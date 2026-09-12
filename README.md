@@ -98,6 +98,7 @@ if err != nil {
 
 | Profile | Transport | Protocol | Address Format | Behavior |
 | :--- | :--- | :--- | :--- | :--- |
+| `"auto-hello"`, `"auto"` | **Auto (TCP / TLS)** | Hello | `IP:Port` | **Intelligent Auto-Encryption**: Evaluates target address using `MachineDetector`. Connects via unencrypted Framed TCP if local machine; automatically enables TLS if destination is on a remote machine. |
 | `"tcp"` | TCP | None | `IP:Port` | Raw TCP stream. |
 | `"tcp-hello"` | TCP | Hello | `IP:Port` | TCP + Identity Handshake. |
 | `"tls"` | TLS | None | `IP:Port` | Raw TLS stream. |
@@ -106,6 +107,25 @@ if err != nil {
 | `"udp-hello"` | UDP | Hello | `IP:Port` | **Stateless Envelope**: Wraps every packet with Identity + Payload. |
 | `"shm"` | SHM | None | File Path | Raw Memory Mapped File. |
 | `"shm-hello"` | SHM | Hello | File Path | SHM + Identity Handshake. |
+
+### 🔒 Intelligent Auto-Encryption (`auto-hello`)
+
+When using profile `"auto-hello"` (or shorthand `"auto"`), `safe-socket` removes the need to manually choose between `tcp-hello` and `tls-hello`:
+- **Same Machine / Local Network Interface**: Detects loopback (`127.0.0.0/8`, `::1`, `localhost`), hostnames, and any active host network interface IP (via `net.InterfaceAddrs()` cached in `MachineDetector`). Uses high-performance unencrypted framed TCP with zero TLS CPU overhead.
+- **Remote Machine**: Automatically engages TLS encryption with certificate/CA verification for cross-machine communication (LAN, WAN, or Cloud).
+
+### 📡 Dynamic Service Discovery Address Advertising
+
+When connecting to an ecosystem registry (such as `config-server`), a service can advertise its real inbound listening port rather than the OS-assigned ephemeral client port:
+
+```go
+config := safesocket.SocketConfig{
+    ServiceAddress: "127.0.0.2:1026", // Real inbound listening address
+}
+socket, err := safesocket.CreateWithConfig("auto-hello:notif-server", "127.0.0.2:3306", config, "client", true)
+```
+
+The `ServiceAddress` is transmitted in `HelloMsg.FromAddress` during handshake, allowing servers and sibling services to dynamically route to this service.
 
 ### Compound Profiles (Identity Injection)
 

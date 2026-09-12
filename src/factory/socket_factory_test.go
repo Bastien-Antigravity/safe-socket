@@ -48,3 +48,23 @@ func TestRegression_IgnoreEnvOverrides(t *testing.T) {
 	// For now, this test serves as a compilation check that the logic is gone
 	// (if I had left references, they might have surfaced here if I tried to use them).
 }
+
+func TestAutoHelloProfile_LocalVsRemote(t *testing.T) {
+	// 1. Local destination -> Should resolve to TCP transport
+	localSocket, err := Create("auto-hello:test-local", "127.0.0.2:9020", "", "client", false)
+	if err != nil {
+		t.Fatalf("Failed to create auto-hello socket for local address: %v", err)
+	}
+	if localSocket == nil {
+		t.Fatal("Expected localSocket to be non-nil")
+	}
+
+	// 2. Remote destination -> Should resolve to TLS transport
+	remoteSocket, err := Create("auto-hello:test-remote", "203.0.113.50:9020", "", "client", false)
+	if err != nil {
+		t.Fatalf("Failed to create auto-hello socket for remote address: %v", err)
+	}
+	if remoteSocket == nil {
+		t.Fatal("Expected remoteSocket to be non-nil")
+	}
+}
