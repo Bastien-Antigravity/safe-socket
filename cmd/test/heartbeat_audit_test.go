@@ -1,5 +1,19 @@
 package test
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Integration audit verifying that background heartbeats keep idle connections alive
+// across TCP, UDP, and SHM transports.
+//
+// DATA FLOW:
+// 1. Input: Transports configured with fast heartbeats (100ms) and short idle timeouts (500ms).
+// 2. Logic: Sleeps beyond idle timeout and verifies that connections remain open and active.
+// 3. Output: Pass/fail unit test assertions.
+//
+// KEY PARAMETERS:
+// - t: Testing handle.
+// =============================================================================
+
 import (
 	"os"
 	"testing"

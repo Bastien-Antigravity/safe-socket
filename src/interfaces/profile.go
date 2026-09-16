@@ -1,5 +1,20 @@
 package interfaces
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Defines SocketProfile abstractions and transport/protocol enum constants,
+// enabling named profile resolution across TCP, TLS, UDP, and Shared Memory.
+//
+// DATA FLOW:
+// 1. Input: Profile names and connection endpoint configuration strings.
+// 2. Logic: Translates string names into concrete transport and protocol configurations.
+// 3. Output: SocketProfile instances consumed by socket factories.
+//
+// KEY PARAMETERS:
+// - TransportType: Transport enumeration (FramedTCP, TLS, SharedMemory, UDP).
+// - ProtocolType: Protocol enumeration (None, Hello).
+// =============================================================================
+
 // TransportType defines the underlying transport mechanism.
 type TransportType string
 

@@ -1,5 +1,22 @@
 package facade
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Implements the interfaces.Socket interface for client-side transport management,
+// handling exponential-backoff dial reconnection, TLS/TCP/UDP/SHM transport setup,
+// protocol handshakes, and thread-safe data sending and receiving.
+//
+// DATA FLOW:
+// 1. Input: Target endpoint address, SocketProfile, and SocketConfig.
+// 2. Logic: Dials transport with jittered backoff, runs protocol handshake,
+//    decorates with heartbeat and reliability wrappers, and manages I/O.
+// 3. Output: Transmits and receives framed payloads across established streams.
+//
+// KEY PARAMETERS:
+// - Profile: Socket profile configuring transport type and handshake protocol.
+// - Config: Client configuration specifying timeouts, retries, and certificates.
+// =============================================================================
+
 import (
 	"errors"
 	"fmt"

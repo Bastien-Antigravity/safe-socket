@@ -1,5 +1,20 @@
 package transports
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Implements UDP listener handling for receiving connectionless datagram packets
+// and converting them into virtual connection streams for the socket server.
+//
+// DATA FLOW:
+// 1. Input: Local UDP bind address host:port and timeout duration.
+// 2. Logic: Binds net.ListenUDP; on Accept(), reads the initial datagram and creates a transient UdpSocket.
+// 3. Output: TransportConnection representing the peer datagram source.
+//
+// KEY PARAMETERS:
+// - ListenUDP: Binds UDP listening socket.
+// - UdpListener: Listener implementation for UDP datagrams.
+// =============================================================================
+
 import (
 	"net"
 	"time"

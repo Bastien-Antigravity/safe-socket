@@ -1,5 +1,19 @@
 package transports
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Implements server listener implementations for cleartext and TLS-secured framed TCP sockets.
+//
+// DATA FLOW:
+// 1. Input: Bind address string, idle timeout duration, and TLS configuration.
+// 2. Logic: Binds net.Listen, accepts raw TCP connections, and wraps them in FramedTCPSocket.
+// 3. Output: FramedTCPListener conforming to interfaces.TransportListener.
+//
+// KEY PARAMETERS:
+// - Listen: Binds cleartext framed TCP server socket.
+// - ListenTLS: Binds TLS-secured framed TCP server socket.
+// =============================================================================
+
 import (
 	"crypto/tls"
 	"crypto/x509"

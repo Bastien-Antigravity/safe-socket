@@ -1,5 +1,20 @@
 package factory
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Instantiates and composes Socket instances from profile definitions and runtime configs,
+// automatically selecting optimal transports (SHM vs FramedTCP) and protocol decorators.
+//
+// DATA FLOW:
+// 1. Input: Profile names (tcp-hello, shm, udp-reliable), target addresses, and configs.
+// 2. Logic: Resolves profile specifications, checks machine locality, configures timeouts,
+//    and wraps transport layers with Handshake, Heartbeat, or Reliability facades.
+// 3. Output: Initialized Socket interface ready for listening or client connection.
+//
+// KEY PARAMETERS:
+// - Create: Factory constructor method accepting profile name, address, and config.
+// =============================================================================
+
 import (
 	"fmt"
 	"strings"

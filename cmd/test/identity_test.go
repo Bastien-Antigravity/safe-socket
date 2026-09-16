@@ -1,5 +1,19 @@
 package test
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Unit tests verifying Cap'n Proto peer identity extraction across deeply nested
+// transport connection wrapper decorators.
+//
+// DATA FLOW:
+// 1. Input: Layered connections wrapped in Handshake, Heartbeat, and Enveloped decorators.
+// 2. Logic: Calls safesocket.GetPeerIdentity() to unwrap layers down to Cap'n Proto identity.
+// 3. Output: Pass/fail unit test assertions.
+//
+// KEY PARAMETERS:
+// - t: Testing handle.
+// =============================================================================
+
 import (
 	"net"
 	"testing"

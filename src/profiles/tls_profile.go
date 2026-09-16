@@ -1,5 +1,20 @@
 package profiles
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Defines TLS socket profiles for encrypted client and server stream transports,
+// securing network communication across untrusted network boundaries.
+//
+// DATA FLOW:
+// 1. Input: Target endpoint address, timeouts, and cryptographic options.
+// 2. Logic: Implements SocketProfile specifying TLS transport properties.
+// 3. Output: TlsClientProfile and TlsServerProfile instances.
+//
+// KEY PARAMETERS:
+// - TlsClientProfile: Outbound TLS client profile.
+// - TlsServerProfile: Inbound TLS listener profile.
+// =============================================================================
+
 import "github.com/Bastien-Antigravity/safe-socket/src/interfaces"
 
 // -----------------------------------------------------------------------------

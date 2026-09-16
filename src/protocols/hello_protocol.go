@@ -1,5 +1,21 @@
 package protocols
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Implements the Hello Protocol handshake and packet encapsulation logic,
+// constructing and unmarshaling Cap'n Proto HelloMsg and PacketEnvelope frames.
+//
+// DATA FLOW:
+// 1. Input: TransportConnection, SocketProfile identity, and SocketConfig metadata.
+// 2. Logic: Marshals sender identity and advertised endpoints into Cap'n Proto messages;
+//    unmarshals incoming handshake frames or packet envelopes.
+// 3. Output: Verified schemas.HelloMsg or unpacked payload bytes.
+//
+// KEY PARAMETERS:
+// - HelloProtocol: Protocol implementation struct.
+// - schemas.HelloMsg: Cap'n Proto root struct conveying node and service identity.
+// =============================================================================
+
 import (
 	"os"
 

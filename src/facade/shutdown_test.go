@@ -1,5 +1,19 @@
 package facade
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Unit tests for SocketServer shutdown semantics, asserting synchronous connection
+// draining, deadline wait limits, and deadlock prevention with uncooperative clients.
+//
+// DATA FLOW:
+// 1. Input: Local TCP test connections bound to ephemeral loopback ports.
+// 2. Logic: Asserts server Close waits for in-flight work and force-closes hung streams.
+// 3. Output: Go testing assertions for graceful shutdown timing and exit codes.
+//
+// KEY PARAMETERS:
+// - mockProfile: Test socket profile configuring loopback TCP transport.
+// =============================================================================
+
 import (
 	"net"
 	"testing"
@@ -67,3 +81,51 @@ func TestSynchronousShutdown(t *testing.T) {
 		t.Logf("Server closed gracefully in %v", duration)
 	}
 }
+
+// -----------------------------------------------------------------------------
+
+func TestShutdownWithUncooperativeClient(t *testing.T) {
+	profile := &mockProfile{}
+	// Short deadline: 200ms
+	config := models.SocketConfig{Deadline: 200 * time.Millisecond}
+	server := NewSocketServer(profile, config)
+
+	if err := server.Listen(); err != nil {
+		t.Fatal(err)
+	}
+	addr, _ := server.GetAddr()
+
+	// Accept in background and keep connection open indefinitely
+	go func() {
+		for {
+			_, err := server.Accept()
+			if err != nil {
+				return
+			}
+			// Client/worker never calls conn.Close()
+		}
+	}()
+
+	// Connect a client that holds socket open indefinitely
+	clientConn, err := net.Dial("tcp", addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer clientConn.Close()
+
+	// Close must not hang forever; it should force-close active connections after drainTimeout
+	done := make(chan error, 1)
+	go func() {
+		done <- server.Close()
+	}()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("server.Close() failed: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("DEADLOCK DETECTED: server.Close() failed to unblock with uncooperative client")
+	}
+}
+

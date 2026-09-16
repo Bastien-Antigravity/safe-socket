@@ -1,5 +1,19 @@
 package interfaces
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Defines the Protocol interface contract, decoupling protocol handshake negotiation
+// and packet encapsulation from underlying physical network transports.
+//
+// DATA FLOW:
+// 1. Input: Active TransportConnection, SocketProfile, and SocketConfig.
+// 2. Logic: Initiates handshakes, waits for authentication, and encapsulates/decapsulates packets.
+// 3. Output: Returns verified HelloMsg schemas and unwrapped payload data.
+//
+// KEY PARAMETERS:
+// - Protocol: Unified interface for connection-oriented and stateless handshakes.
+// =============================================================================
+
 import (
 	"github.com/Bastien-Antigravity/safe-socket/src/models"
 	"github.com/Bastien-Antigravity/safe-socket/src/schemas"

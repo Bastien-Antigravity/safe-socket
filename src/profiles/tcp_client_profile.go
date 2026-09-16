@@ -1,5 +1,20 @@
 package profiles
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Defines TCP client socket profiles for standard stream-oriented connections
+// with or without application-level handshake protocols.
+//
+// DATA FLOW:
+// 1. Input: Endpoint host:port strings, timeouts, and protocol specifications.
+// 2. Logic: Implements SocketProfile to declare TCP transport characteristics for clients.
+// 3. Output: TcpClientProfile and TcpHelloClientProfile configurations.
+//
+// KEY PARAMETERS:
+// - TcpClientProfile: Profile for raw framed TCP communication.
+// - TcpHelloClientProfile: Profile enforcing Cap'n Proto HelloMsg handshake.
+// =============================================================================
+
 import "github.com/Bastien-Antigravity/safe-socket/src/interfaces"
 
 // -----------------------------------------------------------------------------

@@ -1,5 +1,19 @@
 package interfaces
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Defines the universal logging interface contract for safe-socket components,
+// decoupling transport, facade, and protocol logging from concrete logger backends.
+//
+// DATA FLOW:
+// 1. Input: Diagnostic and error string messages at varying severity levels.
+// 2. Logic: Delegated to the injected ecosystem logger implementation.
+// 3. Output: Structured log records dispatched to console, file, or remote sinks.
+//
+// KEY PARAMETERS:
+// - Logger: Interface defining Debug, Info, Warning, Error, Critical, and Close methods.
+// =============================================================================
+
 // -----------------------------------------------------------------------------
 // Logger is the main interface for logging
 type Logger interface {

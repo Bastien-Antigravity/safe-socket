@@ -1,5 +1,20 @@
 package profiles
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Defines TCP server socket profiles for inbound listener sockets with or without
+// application-level handshake and peer identity verification.
+//
+// DATA FLOW:
+// 1. Input: Local bind address host:port, idle timeouts, and protocol configuration.
+// 2. Logic: Implements SocketProfile to declare TCP listening transport attributes.
+// 3. Output: TcpServerProfile and TcpHelloServerProfile configurations.
+//
+// KEY PARAMETERS:
+// - TcpServerProfile: Profile for raw framed TCP listener.
+// - TcpHelloServerProfile: Profile enforcing Cap'n Proto HelloMsg verification on accept.
+// =============================================================================
+
 import "github.com/Bastien-Antigravity/safe-socket/src/interfaces"
 
 // -----------------------------------------------------------------------------

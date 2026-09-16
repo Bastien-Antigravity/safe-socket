@@ -1,5 +1,19 @@
 package test
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Comprehensive end-to-end factory test suite validating TCP, UDP, TLS, and SHM
+// socket initialization, handshake flows, and bidirectional transport I/O.
+//
+// DATA FLOW:
+// 1. Input: Diverse profile and configuration scenarios across transports.
+// 2. Logic: Creates client/server pairs, opens listeners, exchanges test payloads.
+// 3. Output: Pass/fail unit test assertions.
+//
+// KEY PARAMETERS:
+// - t: Testing handle.
+// =============================================================================
+
 import (
 	"crypto/rand"
 	"crypto/rsa"

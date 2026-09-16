@@ -1,5 +1,20 @@
 package facade
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Implements a lightweight Reliable UDP (RUDP) framing layer over connectionless transports,
+// providing sequencing, ACKs, retransmission, and duplicate packet deduplication.
+//
+// DATA FLOW:
+// 1. Input: Application payloads written to UDP transport streams.
+// 2. Logic: Prepends 17-byte RUDP headers with Sequence/Ack numbers, manages retransmission
+//    timers, and deduplicates incoming packets using monotonic sequence tracking.
+// 3. Output: In-order, reliable delivery of UDP datagram payloads.
+//
+// KEY PARAMETERS:
+// - RudpHeaderSize: Fixed 17-byte reliability header prepended to datagrams.
+// =============================================================================
+
 import (
 	"encoding/binary"
 	"errors"

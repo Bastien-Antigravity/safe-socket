@@ -1,5 +1,19 @@
 package models
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Encapsulates runtime environment configuration parameters for socket instances,
+// decoupling profile templates from dynamic network attributes and connection timeouts.
+//
+// DATA FLOW:
+// 1. Input: Service addresses, public IPs, deadline durations, and retry counts.
+// 2. Logic: Injected into factory constructors and passed to transport decorators.
+// 3. Output: Configured timeout deadlines, retry policies, and advertised identities.
+//
+// KEY PARAMETERS:
+// - SocketConfig: Struct holding PublicIP, ServiceAddress, Deadline, HeartbeatInterval, HandshakeTimeout, MaxRetries.
+// =============================================================================
+
 import (
 	"time"
 )

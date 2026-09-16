@@ -1,5 +1,19 @@
 package transports
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Implements server listener handling for shared memory (SHM) point-to-point IPC.
+//
+// DATA FLOW:
+// 1. Input: Filesystem path to backing mmap file and idle timeout duration.
+// 2. Logic: Truncates and maps the shared memory file; waits for peer handshake on Accept().
+// 3. Output: ShmSocket configured with server channel direction (Channel 1=write, Channel 0=read).
+//
+// KEY PARAMETERS:
+// - ListenShm: Binds server shared memory listener.
+// - ShmListener: Listener managing single-client point-to-point SHM connection.
+// =============================================================================
+
 import (
 	"errors"
 	"net"

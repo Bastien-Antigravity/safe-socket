@@ -1,5 +1,19 @@
 package test
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// High-concurrency stress testing suite evaluating throughput, connection churn,
+// and buffer safety under concurrent client workloads.
+//
+// DATA FLOW:
+// 1. Input: 100 concurrent clients sending batches of messages to server.
+// 2. Logic: Tracks delivered message counters and ensures zero packet loss or memory corruption.
+// 3. Output: Pass/fail unit test assertions.
+//
+// KEY PARAMETERS:
+// - t: Testing handle.
+// =============================================================================
+
 import (
 	"fmt"
 	"os"

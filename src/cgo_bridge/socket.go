@@ -1,5 +1,20 @@
 package cgo_bridge
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Implements Go-level orchestration for CGO bridge functions, exposing socket
+// lifecycle (create, open, accept, read, write, close) through integer handles.
+//
+// DATA FLOW:
+// 1. Input: Profile names, addresses, timeout parameters, and byte buffers from C.
+// 2. Logic: Calls Go safesocket package methods; converts Go slices to memory copies.
+// 3. Output: Read byte counts, error codes, and handle IDs returned to C ABI.
+//
+// KEY PARAMETERS:
+// - Create: Creates and registers a socket handle.
+// - Read/Write: Performs buffered I/O across registered connection handles.
+// =============================================================================
+
 import (
 	"errors"
 	"time"

@@ -1,5 +1,19 @@
 package utils
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Detects whether an IP address or hostname belongs to the local host machine,
+// enabling automatic optimization from network TCP to shared memory transport.
+//
+// DATA FLOW:
+// 1. Input: Hostname or IP address string.
+// 2. Logic: Caches local network interfaces and compares candidate IPs with cached set.
+// 3. Output: Boolean flag indicating whether the address is local to the machine.
+//
+// KEY PARAMETERS:
+// - MachineDetector: Cached detector struct with TTL-governed network interface refreshes.
+// =============================================================================
+
 import (
 	"net"
 	"os"

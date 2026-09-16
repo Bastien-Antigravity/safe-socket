@@ -1,5 +1,20 @@
 package interfaces
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Defines the low-level TransportConnection and TransportListener contracts across
+// TCP, TLS, UDP, and Shared Memory transports, standardizing framed network I/O.
+//
+// DATA FLOW:
+// 1. Input: Low-level socket file descriptors and memory-mapped ring buffers.
+// 2. Logic: Enforces io.ReadWriteCloser, frame-level ReadMessage, and deadline methods.
+// 3. Output: Streamlined low-level transport handles passed to protocol facade decorators.
+//
+// KEY PARAMETERS:
+// - TransportConnection: Interface fulfilling framed stream I/O and deadlines.
+// - TransportListener: Interface accepting inbound transport connections.
+// =============================================================================
+
 import (
 	"io"
 	"net"

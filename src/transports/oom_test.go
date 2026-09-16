@@ -1,5 +1,18 @@
 package transports
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Unit tests verifying Out-Of-Memory (OOM) boundary protection in framed TCP sockets.
+//
+// DATA FLOW:
+// 1. Input: Malicious frame length header exceeding MaxPayloadSize (64MB).
+// 2. Logic: Asserts that transport detects payload boundary violation and drops connection.
+// 3. Output: Pass/fail unit test assertions.
+//
+// KEY PARAMETERS:
+// - t: Testing handle.
+// =============================================================================
+
 import (
 	"encoding/binary"
 	"net"

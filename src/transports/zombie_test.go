@@ -1,5 +1,18 @@
 package transports
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Unit tests verifying zombie connection detection and idle timeout enforcement.
+//
+// DATA FLOW:
+// 1. Input: Idle network and shared-memory connections.
+// 2. Logic: Asserts that dead/unresponsive sockets are terminated within configured idle timeouts.
+// 3. Output: Pass/fail unit test assertions.
+//
+// KEY PARAMETERS:
+// - t: Testing handle.
+// =============================================================================
+
 import (
 	"net"
 	"os"

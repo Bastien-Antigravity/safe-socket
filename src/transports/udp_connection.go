@@ -1,5 +1,19 @@
 package transports
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Implements UDP datagram transport connection handling for safe-socket,
+// supporting both connected client sockets and server transient datagram routing.
+//
+// DATA FLOW:
+// 1. Input: Datagram bytes or transient remote addresses.
+// 2. Logic: Performs ReadFromUDP / WriteToUDP or connected socket read/write operations.
+// 3. Output: TransportConnection interface for UDP datagram streams.
+//
+// KEY PARAMETERS:
+// - UdpSocket: Datagram connection struct wrapping *net.UDPConn.
+// =============================================================================
+
 import (
 	"net"
 	"time"

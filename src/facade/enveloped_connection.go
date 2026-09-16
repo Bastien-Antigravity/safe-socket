@@ -1,5 +1,20 @@
 package facade
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Wraps UDP transport connections to enforce stateless packet encapsulation and
+// decapsulation via Cap'n Proto PacketEnvelope frames without persistent sessions.
+//
+// DATA FLOW:
+// 1. Input: Outgoing application payload buffers or incoming UDP datagrams.
+// 2. Logic: Encapsulates outgoing data with SenderID; decapsulates incoming
+//    packets to extract payload and reconstruct sender HelloMsg identity.
+// 3. Output: Raw payload bytes and dynamically updated LastIdentity.
+//
+// KEY PARAMETERS:
+// - LastIdentity: Dynamically updated identity of the sender of the last packet read.
+// =============================================================================
+
 import (
 	"errors"
 	"net"

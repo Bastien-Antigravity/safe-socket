@@ -1,5 +1,21 @@
 package safesocket
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Serves as the primary public entrypoint and package facade for safe-socket,
+// exposing zero-boilerplate socket creation and peer identity inspection helpers.
+//
+// DATA FLOW:
+// 1. Input: Profile names, target network addresses, and SocketConfig models.
+// 2. Logic: Delegates instantiation to factory.Create and extracts Cap'n Proto
+//    identities across nested transport decorators (heartbeat, handshake, envelope).
+// 3. Output: Initialized Socket interfaces ready for immediate network I/O.
+//
+// KEY PARAMETERS:
+// - profileName: Target transport and protocol identifier (e.g. tcp-hello, shm).
+// - address: Target network endpoint IP:Port or SHM filesystem path.
+// =============================================================================
+
 import (
 	"github.com/Bastien-Antigravity/safe-socket/src/facade"
 	"github.com/Bastien-Antigravity/safe-socket/src/factory"

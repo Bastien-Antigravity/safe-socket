@@ -1,5 +1,19 @@
 package facade
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Unit tests verifying dynamic ticker restart inside HeartbeatConnection when
+// SetIdleTimeout is updated at runtime without socket reconnects.
+//
+// DATA FLOW:
+// 1. Input: Active loopback TCP connection wrapped in HeartbeatConnection.
+// 2. Logic: Updates idle timeout from 200ms to 400ms and asserts interval adapts.
+// 3. Output: Go testing assertions for dynamic ticker reconfiguration.
+//
+// KEY PARAMETERS:
+// - SetIdleTimeout: Dynamically recalculates heartbeat safety interval (IdleTimeout/2.5).
+// =============================================================================
+
 import (
 	"net"
 	"testing"

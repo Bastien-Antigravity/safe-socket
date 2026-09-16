@@ -1,5 +1,19 @@
 package test
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Integration tests verifying deadline timeout enforcement across server-accepted
+// connections and client write operations.
+//
+// DATA FLOW:
+// 1. Input: Sockets configured with strict read/write deadlines.
+// 2. Logic: Blocks on read/write without activity and verifies timeout errors occur.
+// 3. Output: Pass/fail unit test assertions.
+//
+// KEY PARAMETERS:
+// - t: Testing handle.
+// =============================================================================
+
 import (
 	"fmt"
 	"testing"

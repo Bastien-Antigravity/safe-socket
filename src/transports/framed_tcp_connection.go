@@ -1,5 +1,22 @@
 package transports
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Implements length-prefixed TCP streaming transport (FramedTCPSocket),
+// framing application payloads with 4-byte big-endian integers and handling
+// framed packet read and write streams with idle deadline refreshes.
+//
+// DATA FLOW:
+// 1. Input: Arbitrary payload byte slices from upper layers.
+// 2. Logic: Formats 4-byte big-endian length prefix; writes header followed by payload;
+//    reads framed packets with buffer pooling and size verification.
+// 3. Output: Raw payload slices stripped of transport framing.
+//
+// KEY PARAMETERS:
+// - FramedTCPSocket: TransportConnection implementation wrapping net.Conn.
+// - MaxPayloadSize: 64MB frame boundary limit preventing memory exhaustion.
+// =============================================================================
+
 import (
 	"bufio"
 	"encoding/binary"
@@ -168,7 +185,7 @@ func (s *FramedTCPSocket) Write(p []byte) (n int, err error) {
 		return 0, err
 	}
 
-	// 3. Write Data
+	// 3. Write Data (Zero-copy payload stream)
 	return s.Conn.Write(p)
 }
 

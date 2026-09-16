@@ -1,5 +1,18 @@
 package factory
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Unit tests verifying factory configuration resolution and timeout handling.
+//
+// DATA FLOW:
+// 1. Input: Mock environment variables and custom SocketConfig instances.
+// 2. Logic: Asserts that factory honors strict code configurations over env variables.
+// 3. Output: Pass/fail unit test assertions.
+//
+// KEY PARAMETERS:
+// - t: Testing handle.
+// =============================================================================
+
 import (
 	"os"
 	"testing"

@@ -1,5 +1,19 @@
 package profiles
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Defines shared-memory (SHM) socket profiles for high-throughput, low-latency
+// intra-node IPC communications.
+//
+// DATA FLOW:
+// 1. Input: Memory-mapped file paths, connection timeouts, and protocol types.
+// 2. Logic: Fulfills the SocketProfile interface for shared-memory transport resolution.
+// 3. Output: Configured SHM profile objects for socket factory instantiation.
+//
+// KEY PARAMETERS:
+// - ShmProfile: Struct specifying SHM file path and handshake protocol.
+// =============================================================================
+
 import "github.com/Bastien-Antigravity/safe-socket/src/interfaces"
 
 // -----------------------------------------------------------------------------

@@ -1,5 +1,18 @@
 package transports
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Unit tests verifying framed TCP heartbeat (ping/pong) transmission and consumption.
+//
+// DATA FLOW:
+// 1. Input: Zero-length heartbeat frames (length header = 0).
+// 2. Logic: Asserts that transport skips empty heartbeat frames and returns actual data.
+// 3. Output: Pass/fail unit test assertions.
+//
+// KEY PARAMETERS:
+// - t: Testing handle.
+// =============================================================================
+
 import (
 	"encoding/binary"
 	"net"

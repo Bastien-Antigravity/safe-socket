@@ -1,5 +1,19 @@
 package profiles
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Defines UDP datagram socket profiles for connectionless or packet-sequenced
+// low-latency network communication.
+//
+// DATA FLOW:
+// 1. Input: Remote or local UDP address host:port and protocol type.
+// 2. Logic: Implements SocketProfile for UDP datagram transports.
+// 3. Output: Configured UdpProfile instances.
+//
+// KEY PARAMETERS:
+// - UdpProfile: Struct providing UDP transport metadata and protocol definitions.
+// =============================================================================
+
 import "github.com/Bastien-Antigravity/safe-socket/src/interfaces"
 
 // -----------------------------------------------------------------------------

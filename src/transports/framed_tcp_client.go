@@ -1,5 +1,19 @@
 package transports
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Implements client dialing functions for plain and TLS-secured framed TCP connections.
+//
+// DATA FLOW:
+// 1. Input: Target network address, connection timeout duration, and optional TLS credentials.
+// 2. Logic: Executes net.DialTimeout, configures TCP keep-alives and buffers, and wraps net.Conn.
+// 3. Output: Initialized TransportConnection instance ready for framed I/O.
+//
+// KEY PARAMETERS:
+// - Connect: Establishes cleartext framed TCP connection.
+// - ConnectTLS: Establishes TLS-secured framed TCP connection.
+// =============================================================================
+
 import (
 	"crypto/tls"
 	"crypto/x509"

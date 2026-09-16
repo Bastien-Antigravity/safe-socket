@@ -1,5 +1,20 @@
 package main
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Exports C-compatible shared library symbols (libsafesocket) for polyglot consumers
+// (Python, Rust, C++) to interact with safe-socket over the standard C ABI.
+//
+// DATA FLOW:
+// 1. Input: C types (*C.char, C.int, *C.uchar) from foreign language runtimes.
+// 2. Logic: Translates C types, sanitizes strings, delegates to cgo_bridge, sets last error.
+// 3. Output: Integer handle identifiers, read/write byte counts, and exported C ABI functions.
+//
+// KEY PARAMETERS:
+// - c_safe_socket_create: C export for socket creation.
+// - c_safe_socket_read/write: C exports for buffered data transmission.
+// =============================================================================
+
 /*
 #include <stdlib.h>
 #include <string.h>

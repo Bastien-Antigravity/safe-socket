@@ -1,5 +1,19 @@
 package main
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Test matrix echo server utility for validating multi-client connection scaling,
+// heartbeat behavior, and throughput under synthetic load conditions.
+//
+// DATA FLOW:
+// 1. Input: Incoming framed TCP connections and client requests on port 9999.
+// 2. Logic: Echoes received data packets back to clients and manages client tracking.
+// 3. Output: Echoed framed responses sent to clients.
+//
+// KEY PARAMETERS:
+// - addr: Target bind host:port (defaults to 127.0.0.1:9999).
+// =============================================================================
+
 import (
 	"fmt"
 	"log"

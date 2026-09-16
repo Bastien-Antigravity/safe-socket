@@ -1,5 +1,19 @@
 package test
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Scenario-driven integration tests evaluating customized timeout, deadline,
+// and rapid heartbeat configurations under simulated latency conditions.
+//
+// DATA FLOW:
+// 1. Input: Custom SocketConfig parameters (tight handshakes, deadlines).
+// 2. Logic: Spins up server/client, runs parameterized scenario, verifies handshake success.
+// 3. Output: Pass/fail unit test assertions.
+//
+// KEY PARAMETERS:
+// - t: Testing handle.
+// =============================================================================
+
 import (
 	"fmt"
 	"testing"

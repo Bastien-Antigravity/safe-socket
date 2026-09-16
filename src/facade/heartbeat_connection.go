@@ -1,5 +1,20 @@
 package facade
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Wraps a TransportConnection decorator to periodically dispatch zero-length heartbeat frames,
+// keeping TCP/TLS/SHM connections alive and failing fast upon transport partition.
+//
+// DATA FLOW:
+// 1. Input: Underling TransportConnection and configured heartbeat interval.
+// 2. Logic: Runs background ticker routine to transmit empty frames, dynamically
+//    restarting ticker when idle timeouts are updated via SetIdleTimeout.
+// 3. Output: Transparently proxies read/write calls while interleaving heartbeats.
+//
+// KEY PARAMETERS:
+// - interval: Heartbeat interval derived from safety ratio (IdleTimeout / 2.5).
+// =============================================================================
+
 import (
 	"sync"
 	"time"

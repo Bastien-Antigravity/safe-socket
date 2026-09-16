@@ -48,14 +48,26 @@ build/
 dist/
 *.egg-info/
 
-# C++
+# C++ & Polyglot Shared Libraries
 build/
 bin/
 obj/
 *.o
 *.a
 *.so
+*.so.*
+*.dylib
+*.dylib.*
+*.dll
 *.out
+
+# Safesock compiled libraries
+safesock/libsafesocket/*.so
+safesock/libsafesocket/*.dylib
+safesock/libsafesocket/*.dll
+safesock/python/safesocket/*.so
+safesock/python/safesocket/*.dylib
+safesock/python/safesocket/*.dll
 
 # --- Secrets & Config ---
 .env*

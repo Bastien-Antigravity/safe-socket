@@ -1,5 +1,19 @@
 package interfaces
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Defines the core Socket interface contract for high-level client and server operations,
+// unifying connection establishment, data transmission, and idle timeout management.
+//
+// DATA FLOW:
+// 1. Input: Higher-level consumer requests (Open, Listen, Accept, Send, Receive).
+// 2. Logic: Enforces standard contract implemented by SocketClient and SocketServer.
+// 3. Output: Operates socket state and delivers received payloads.
+//
+// KEY PARAMETERS:
+// - Socket: Unified interface exported across the Bastien-Antigravity ecosystem.
+// =============================================================================
+
 import (
 	"time"
 )

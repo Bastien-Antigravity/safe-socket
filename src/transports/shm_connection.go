@@ -1,5 +1,21 @@
 package transports
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Implements lock-free single-producer single-consumer (SPSC) shared memory (SHM)
+// ring buffers via memory-mapped files (mmap) for ultra-low latency IPC.
+//
+// DATA FLOW:
+// 1. Input: Byte slices to write into bidirectional memory-mapped ring buffers.
+// 2. Logic: Uses atomic CAS/load/store operations on head and tail pointer offsets;
+//    reads framed payloads with exponential backoff and yielding.
+// 3. Output: Zero-copy/low-overhead payload delivery between local host processes.
+//
+// KEY PARAMETERS:
+// - ShmSocket: TransportConnection implementation backed by memory-mapped file.
+// - BufferDataSize: 32MB buffer capacity per direction.
+// =============================================================================
+
 import (
 	"encoding/binary"
 	"io"

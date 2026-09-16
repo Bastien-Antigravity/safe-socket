@@ -1,5 +1,18 @@
 package utils
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Validates loopback and local network IP resolution for MachineDetector.
+//
+// DATA FLOW:
+// 1. Input: Local loopback addresses (127.0.0.1, localhost, ::1) and non-local targets.
+// 2. Logic: Asserts detection correctness across addresses.
+// 3. Output: Pass/fail unit test assertions.
+//
+// KEY PARAMETERS:
+// - t: Testing handle.
+// =============================================================================
+
 import (
 	"net"
 	"testing"

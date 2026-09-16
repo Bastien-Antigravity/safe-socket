@@ -1,5 +1,21 @@
 package facade
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Implements the interfaces.Socket interface for server-side lifecycle management,
+// handling transport listening, connection tracking, handshakes, and graceful draining.
+//
+// DATA FLOW:
+// 1. Input: Incoming network transport connections from TransportListener.
+// 2. Logic: Enforces handshakes, tracks active connections, monitors idle timeouts,
+//    and coordinates timeout-guarded synchronous shutdown.
+// 3. Output: Accepted TransportConnection streams wrapped with protocol facades.
+//
+// KEY PARAMETERS:
+// - Profile: Socket profile specifying transport protocol and bind address.
+// - Config: Socket configuration providing deadlines and security credentials.
+// =============================================================================
+
 import (
 	"errors"
 	"fmt"
@@ -14,18 +30,22 @@ import (
 	"github.com/Bastien-Antigravity/safe-socket/src/transports"
 )
 
+// -----------------------------------------------------------------------------
+
 // SocketServer implements the interfaces.Socket interface for Server-side operations.
 // It handles listening for connections (Listen) and accepting them (Accept).
 // It also executes the handshake protocol (if configured) during Accept.
 // Client-side methods (Open, Send, Receive) will return errors, as the Server itself
 // does not send/receive data directly; the *accepted connection* does.
 type SocketServer struct {
-	Profile  interfaces.SocketProfile
-	Config   models.SocketConfig
-	listener interfaces.TransportListener
-	Logger   interfaces.Logger
-	wg       sync.WaitGroup
-	mu       sync.RWMutex
+	Profile     interfaces.SocketProfile
+	Config      models.SocketConfig
+	listener    interfaces.TransportListener
+	Logger      interfaces.Logger
+	wg          sync.WaitGroup
+	mu          sync.RWMutex
+	activeConns map[*trackingConnection]struct{}
+	connMu      sync.Mutex
 }
 
 // -----------------------------------------------------------------------------
@@ -33,8 +53,9 @@ type SocketServer struct {
 // NewSocketServer creates a new instance of SocketServer.
 func NewSocketServer(p interfaces.SocketProfile, config models.SocketConfig) *SocketServer {
 	return &SocketServer{
-		Profile: p,
-		Config:  config,
+		Profile:     p,
+		Config:      config,
+		activeConns: make(map[*trackingConnection]struct{}),
 	}
 }
 
@@ -95,10 +116,23 @@ func (s *SocketServer) Accept() (interfaces.TransportConnection, error) {
 
 	// 1a. Track connection for synchronous shutdown
 	s.wg.Add(1)
-	conn = &trackingConnection{
+	tracker := &trackingConnection{
 		TransportConnection: conn,
-		onClose:             s.wg.Done,
 	}
+	tracker.onClose = func() {
+		s.connMu.Lock()
+		delete(s.activeConns, tracker)
+		s.connMu.Unlock()
+		s.wg.Done()
+	}
+	s.connMu.Lock()
+	if s.activeConns == nil {
+		s.activeConns = make(map[*trackingConnection]struct{})
+	}
+	s.activeConns[tracker] = struct{}{}
+	s.connMu.Unlock()
+
+	conn = tracker
 
 	// 1b. Apply Server Config Deadline (Idle Timeout)
 	// If s.Config.Deadline is set (even to 0), we use it as the Idle Timeout.
@@ -192,23 +226,56 @@ func (s *SocketServer) GetAddr() (string, error) {
 
 // -----------------------------------------------------------------------------
 
-// Close stops the server and optionally waits for all active connections to finish.
-// Set Config.Deadline to a positive value to limit the wait time (not yet implemented for WG wait).
+// Close stops the server and waits for active connections to finish within Config.Deadline.
+// If connections remain open after the drain timeout, they are force-closed to prevent shutdown hangs.
 func (s *SocketServer) Close() error {
 	s.mu.Lock()
 	ln := s.listener
 	s.listener = nil
 	s.mu.Unlock()
 
-	if ln != nil {
-		err := ln.Close()
-
-		// Wait for active connections to finish
-		s.wg.Wait()
-
-		return err
+	if ln == nil {
+		return nil
 	}
-	return nil
+
+	err := ln.Close()
+
+	waitDone := make(chan struct{})
+	go func() {
+		s.wg.Wait()
+		close(waitDone)
+	}()
+
+	drainTimeout := s.Config.Deadline
+	if drainTimeout <= 0 {
+		drainTimeout = 5 * time.Second
+	}
+
+	select {
+	case <-waitDone:
+		// Clean graceful shutdown completed within deadline
+	case <-time.After(drainTimeout):
+		// Drain timeout reached: force-close any remaining active connections
+		s.connMu.Lock()
+		conns := make([]*trackingConnection, 0, len(s.activeConns))
+		for c := range s.activeConns {
+			conns = append(conns, c)
+		}
+		s.connMu.Unlock()
+
+		for _, c := range conns {
+			_ = c.Close()
+		}
+
+		// Wait briefly for wg to drain now that connections are closed
+		select {
+		case <-waitDone:
+		case <-time.After(1 * time.Second):
+			// Failsafe
+		}
+	}
+
+	return err
 }
 
 // trackingConnection wraps a TransportConnection to signal when it's closed.

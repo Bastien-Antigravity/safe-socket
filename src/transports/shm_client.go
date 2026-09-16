@@ -1,5 +1,18 @@
 package transports
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Implements client initialization and memory-mapping for shared memory (SHM) connections.
+//
+// DATA FLOW:
+// 1. Input: Filesystem path to memory-mapped backing file and connection timeout.
+// 2. Logic: Opens or creates file, truncates to required ring buffer size, and creates mmap.
+// 3. Output: Initialized ShmSocket acting as client (Channel 0=write, Channel 1=read).
+//
+// KEY PARAMETERS:
+// - ConnectShm: Opens backing file and maps shared memory for client IPC.
+// =============================================================================
+
 import (
 	"os"
 	"sync/atomic"

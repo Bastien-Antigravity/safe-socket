@@ -1,5 +1,19 @@
 package facade
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Decorates a TransportConnection to cache the authenticated peer HelloMsg identity
+// established during initial TCP/TLS/SHM handshake negotiation.
+//
+// DATA FLOW:
+// 1. Input: Underlying TransportConnection and unmarshaled Cap'n Proto HelloMsg.
+// 2. Logic: Embeds the transport connection while preserving verified peer metadata.
+// 3. Output: Readily accessible peer identity via safesocket.GetIdentity.
+//
+// KEY PARAMETERS:
+// - Identity: Verified Cap'n Proto HelloMsg identity struct.
+// =============================================================================
+
 import (
 	"time"
 

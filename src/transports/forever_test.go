@@ -1,5 +1,18 @@
 package transports
 
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Validates timeout parity and infinite (forever) timeout configurations across transports.
+//
+// DATA FLOW:
+// 1. Input: Transports configured with 0 timeout (forever).
+// 2. Logic: Asserts that sockets do not prematurely time out when idle.
+// 3. Output: Pass/fail unit test assertions.
+//
+// KEY PARAMETERS:
+// - t: Testing handle.
+// =============================================================================
+
 import (
 	"net"
 	"testing"
