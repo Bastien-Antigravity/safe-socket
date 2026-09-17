@@ -1,3 +1,16 @@
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Multi-language interoperability matrix client implemented in C++.
+//
+// DATA FLOW:
+// 1. Input: Test matrices and echo payloads sent across SafeSocket TCP sockets.
+// 2. Logic: Sends test packets and verifies matching echo responses from peer services.
+// 3. Output: Interoperability test verification diagnostics.
+//
+// KEY PARAMETERS:
+// - None
+// =============================================================================
+
 #include "../SafeSocket.hpp"
 #include <iostream>
 #include <string>

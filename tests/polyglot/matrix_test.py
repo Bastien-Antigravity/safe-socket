@@ -1,3 +1,19 @@
+"""
+=============================================================================
+ESSENTIAL PROCESS:
+End-to-end polyglot matrix test runner verifying socket interoperability
+across Go, Python, Rust, and C++ clients.
+
+DATA FLOW:
+1. Input: Matrix test configurations and test daemon endpoints.
+2. Logic: Spawns polyglot clients concurrently and validates framed packet exchanges.
+3. Output: Pass/fail matrix test report.
+
+KEY PARAMETERS:
+- None
+=============================================================================
+"""
+
 import subprocess
 import time
 import os

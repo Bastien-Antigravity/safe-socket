@@ -1,3 +1,16 @@
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Rust implementation of the cross-language matrix client for safe-socket.
+//
+// DATA FLOW:
+// 1. Input: Multi-language matrix verification frames.
+// 2. Logic: Sends structured frames and verifies echo replies from test daemon.
+// 3. Output: Console assertions confirming protocol compliance.
+//
+// KEY PARAMETERS:
+// - None
+// =============================================================================
+
 use safesocket::{SafeSocket, SocketConfig};
 use std::env;
 use std::process;

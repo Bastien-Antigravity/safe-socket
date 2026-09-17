@@ -1,3 +1,16 @@
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Basic demonstration example showcasing Rust SafeSocket connection usage.
+//
+// DATA FLOW:
+// 1. Input: Target server address string and message bytes.
+// 2. Logic: Connects via libsafesocket and sends framed payloads.
+// 3. Output: Console status of socket transmission.
+//
+// KEY PARAMETERS:
+// - None
+// =============================================================================
+
 use safesocket::SafeSocket;
 
 fn main() {

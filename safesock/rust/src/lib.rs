@@ -1,3 +1,18 @@
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Rust wrapper crate for safe-socket, providing idiomatic Rust types, RAII
+// handle lifecycle (Drop), framed I/O, and FFI bindings to libsafesocket.
+//
+// DATA FLOW:
+// 1. Input: Socket addresses, configuration parameters, and byte buffers.
+// 2. Logic: Interacts with libsafesocket C ABI via libloading dynamic symbols.
+// 3. Output: SafeSocket connections and read/write frame results.
+//
+// KEY PARAMETERS:
+// - profile_name: TCP handshake identity profile name.
+// - address: Target host:port socket address string.
+// =============================================================================
+
 use libc::{c_char, c_int, c_uchar};
 use std::ffi::{CStr, CString};
 use libloading::{Library, Symbol};

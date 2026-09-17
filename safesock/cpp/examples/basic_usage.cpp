@@ -1,3 +1,16 @@
+// =============================================================================
+// ESSENTIAL PROCESS:
+// Demonstration client showcasing C++ SafeSocket connection and messaging.
+//
+// DATA FLOW:
+// 1. Input: Target server address and message payload.
+// 2. Logic: Establishes SafeSocket connection and writes framed data.
+// 3. Output: Console output confirming message transmission.
+//
+// KEY PARAMETERS:
+// - None
+// =============================================================================
+
 #include "../SafeSocket.hpp"
 #include <iostream>
 #include <vector>

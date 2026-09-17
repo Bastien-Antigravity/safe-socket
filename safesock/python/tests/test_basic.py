@@ -1,3 +1,18 @@
+"""
+=============================================================================
+ESSENTIAL PROCESS:
+Basic unit test suite for the Python SafeSocket wrapper and CGO bridge.
+
+DATA FLOW:
+1. Input: Local TCP test mock server endpoints and test messages.
+2. Logic: Tests connection lifecycle, framed write, and connection teardown.
+3. Output: Pytest execution assertions and status.
+
+KEY PARAMETERS:
+- None
+=============================================================================
+"""
+
 import sys
 import os
 import time

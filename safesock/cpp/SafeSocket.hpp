@@ -1,3 +1,18 @@
+// =============================================================================
+// ESSENTIAL PROCESS:
+// C++ header-only client wrapper for the safe-socket library, providing RAII
+// connection management, framed read/write operations, and CGO bridge interop.
+//
+// DATA FLOW:
+// 1. Input: Network addresses, payloads (bytes/strings), and timeout options.
+// 2. Logic: Calls libsafesocket C ABI for socket creation, read, write, and close.
+// 3. Output: Dispatches length-prefixed frames over robust TCP connections.
+//
+// KEY PARAMETERS:
+// - profile_name: TCP handshake identity profile name.
+// - address: Target host:port socket address string.
+// =============================================================================
+
 #ifndef SAFESOCKET_HPP
 #define SAFESOCKET_HPP
 

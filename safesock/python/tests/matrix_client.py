@@ -1,3 +1,18 @@
+"""
+=============================================================================
+ESSENTIAL PROCESS:
+Python interoperability matrix client for cross-language socket validation.
+
+DATA FLOW:
+1. Input: Test payloads sent to polyglot echo servers over SafeSocket.
+2. Logic: Transmits framed messages and validates byte-for-byte responses.
+3. Output: Assertions verifying polyglot protocol parity.
+
+KEY PARAMETERS:
+- None
+=============================================================================
+"""
+
 import sys
 import os
 import time
