@@ -48,6 +48,7 @@ func NewSocketClient(p interfaces.SocketProfile, c models.SocketConfig) *SocketC
 	return &SocketClient{
 		Profile: p,
 		Config:  c,
+		Logger:  interfaces.EnsureSafeLogger(nil),
 	}
 }
 
@@ -81,9 +82,7 @@ func (c *SocketClient) Open() error {
 		}
 
 		retries++
-		if c.Logger != nil {
-			c.Logger.Warning(fmt.Sprintf("Socket open failed: %v. Retrying in %v (Attempt %d/%d)...", err, currentInterval, retries, c.Config.MaxRetries))
-		}
+		c.Logger.Warning(fmt.Sprintf("Socket open failed: %v. Retrying in %v (Attempt %d/%d)...", err, currentInterval, retries, c.Config.MaxRetries))
 
 		time.Sleep(currentInterval)
 
@@ -158,10 +157,8 @@ func (c *SocketClient) attemptOpen() error {
 	} else if idleTimeout > 0 && float64(heartbeatInterval)*2.5 > float64(idleTimeout) {
 		// If user provided an unsafe heartbeat (too close to deadline), adjust it
 		newHeartbeat := time.Duration(float64(idleTimeout) / 2.5)
-		if c.Logger != nil {
-			c.Logger.Warning(fmt.Sprintf("User HeartbeatInterval (%v) is too close to IdleTimeout (%v). Adjusting to safety ratio: %v",
-				heartbeatInterval, idleTimeout, newHeartbeat))
-		}
+		c.Logger.Warning(fmt.Sprintf("User HeartbeatInterval (%v) is too close to IdleTimeout (%v). Adjusting to safety ratio: %v",
+			heartbeatInterval, idleTimeout, newHeartbeat))
 		heartbeatInterval = newHeartbeat
 	}
 
@@ -319,7 +316,7 @@ func (c *SocketClient) SetIdleTimeout(d time.Duration) error {
 
 // Bind logger to safe-socket
 func (c *SocketClient) SetLogger(logger interfaces.Logger) {
-	c.Logger = logger
+	c.Logger = interfaces.EnsureSafeLogger(logger)
 }
 
 // -----------------------------------------------------------------------------

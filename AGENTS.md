@@ -23,3 +23,6 @@ go test -race ./...
 2. **Goroutine Leak Prevention**: Any network read/write loop must bind to a `context.Context` and terminate cleanly when the context is cancelled.
 3. **Header Ritual**: All Go files MUST begin with the Triple-Block header (`ESSENTIAL PROCESS`, `DATA FLOW`, `KEY PARAMETERS`).
 4. **Section Dividers**: Use `// -----------------------------------------------------------------------------` between exported methods.
+5. **TCP Probe Resilience**: In `SocketServer.Accept()`, 0-byte TCP health checks and port monitors (`io.EOF` / `io.ErrUnexpectedEOF` during handshake) must be cleanly closed and loop continued. Active protocol violations (non-hello traffic) must strictly return an error immediately.
+6. **EnsureSafeLogger Standard**: Injected loggers must always be wrapped with `interfaces.EnsureSafeLogger(l)` in constructors (`NewSocketServer`, `NewSocketClient`) and `SetLogger` to avoid `nil` pointer panics and avoid defensive `if Logger != nil` checks.
+

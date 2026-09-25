@@ -19,6 +19,7 @@ package facade
 import (
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -55,6 +56,7 @@ func NewSocketServer(p interfaces.SocketProfile, config models.SocketConfig) *So
 	return &SocketServer{
 		Profile:     p,
 		Config:      config,
+		Logger:      interfaces.EnsureSafeLogger(nil),
 		activeConns: make(map[*trackingConnection]struct{}),
 	}
 }
@@ -100,115 +102,120 @@ func (s *SocketServer) Listen() error {
 
 // Accept accepts a new connection and performs the handshake if defined.
 func (s *SocketServer) Accept() (interfaces.TransportConnection, error) {
-	s.mu.RLock()
-	ln := s.listener
-	s.mu.RUnlock()
+	for {
+		s.mu.RLock()
+		ln := s.listener
+		s.mu.RUnlock()
 
-	if ln == nil {
-		return nil, errors.New("server not listening")
-	}
+		if ln == nil {
+			return nil, errors.New("server not listening")
+		}
 
-	// 1. Accept raw transport connection
-	conn, err := ln.Accept()
-	if err != nil {
-		return nil, err
-	}
-
-	// 1a. Track connection for synchronous shutdown
-	s.wg.Add(1)
-	tracker := &trackingConnection{
-		TransportConnection: conn,
-	}
-	tracker.onClose = func() {
-		s.connMu.Lock()
-		delete(s.activeConns, tracker)
-		s.connMu.Unlock()
-		s.wg.Done()
-	}
-	s.connMu.Lock()
-	if s.activeConns == nil {
-		s.activeConns = make(map[*trackingConnection]struct{})
-	}
-	s.activeConns[tracker] = struct{}{}
-	s.connMu.Unlock()
-
-	conn = tracker
-
-	// 1b. Apply Server Config Deadline (Idle Timeout)
-	// If s.Config.Deadline is set (even to 0), we use it as the Idle Timeout.
-	idleTimeout := time.Duration(s.Profile.GetConnectTimeout()) * time.Millisecond
-	if s.Config.Deadline >= 0 {
-		idleTimeout = s.Config.Deadline
-	}
-	_ = conn.SetIdleTimeout(idleTimeout)
-
-	// 1c. Apply Reliability Layer if requested (UDP only)
-	if s.Config.Reliable && s.Profile.GetTransport() == interfaces.TransportUDP {
-		conn = NewReliableConnection(conn)
-	}
-
-	// 2. Encapsulation / Handshake Logic
-	// Case A: UDP + Hello (Stateless Envelope)
-	if s.Profile.GetTransport() == interfaces.TransportUDP &&
-		s.Profile.GetProtocol() == interfaces.ProtocolHello {
-
-		// Wrap connection to handle Per-Packet Decapsulation
-		config := models.SocketConfig{} // Server doesn't usually use config for receiving, but wrapper needs it struct
-		conn = NewEnvelopedConnection(conn, s.Profile, config)
-
-	} else if s.Profile.GetProtocol() != "" && s.Profile.GetProtocol() != interfaces.ProtocolNone {
-		// Case B: Connection-Oriented (TCP) + Hello
-		// Perform Standard Handshake (Wait for Client to send Hello)
-		proto := protocols.NewHelloProtocol()
-
-		// Note: The handshake itself will respect the Deadline set in 1b because it uses Read/Write on the conn.
-		helloMsg, err := proto.WaitInitiation(conn)
+		// 1. Accept raw transport connection
+		conn, err := ln.Accept()
 		if err != nil {
-			_ = conn.Close()
 			return nil, err
 		}
 
-		// Wrap with identity
-		conn = NewHandshakeConnection(conn, helloMsg)
-	}
+		// 1a. Track connection for synchronous shutdown
+		s.wg.Add(1)
+		tracker := &trackingConnection{
+			TransportConnection: conn,
+		}
+		tracker.onClose = func() {
+			s.connMu.Lock()
+			delete(s.activeConns, tracker)
+			s.connMu.Unlock()
+			s.wg.Done()
+		}
+		s.connMu.Lock()
+		if s.activeConns == nil {
+			s.activeConns = make(map[*trackingConnection]struct{})
+		}
+		s.activeConns[tracker] = struct{}{}
+		s.connMu.Unlock()
 
-	// 3. Heartbeat Optimization & Safety Ratio
-	heartbeatInterval := s.Config.HeartbeatInterval
-	if heartbeatInterval == 0 {
-		heartbeatInterval = time.Duration(float64(idleTimeout) / 2.5)
-	} else if idleTimeout > 0 && float64(heartbeatInterval)*2.5 > float64(idleTimeout) {
-		// If user provided an unsafe heartbeat (too close to deadline), adjust it
-		newHeartbeat := time.Duration(float64(idleTimeout) / 2.5)
-		if s.Logger != nil {
+		conn = tracker
+
+		// 1b. Apply Server Config Deadline (Idle Timeout)
+		// If s.Config.Deadline is set (even to 0), we use it as the Idle Timeout.
+		idleTimeout := time.Duration(s.Profile.GetConnectTimeout()) * time.Millisecond
+		if s.Config.Deadline >= 0 {
+			idleTimeout = s.Config.Deadline
+		}
+		_ = conn.SetIdleTimeout(idleTimeout)
+
+		// 1c. Apply Reliability Layer if requested (UDP only)
+		if s.Config.Reliable && s.Profile.GetTransport() == interfaces.TransportUDP {
+			conn = NewReliableConnection(conn)
+		}
+
+		// 2. Encapsulation / Handshake Logic
+		// Case A: UDP + Hello (Stateless Envelope)
+		if s.Profile.GetTransport() == interfaces.TransportUDP &&
+			s.Profile.GetProtocol() == interfaces.ProtocolHello {
+
+			// Wrap connection to handle Per-Packet Decapsulation
+			config := models.SocketConfig{} // Server doesn't usually use config for receiving, but wrapper needs it struct
+			conn = NewEnvelopedConnection(conn, s.Profile, config)
+
+		} else if s.Profile.GetProtocol() != "" && s.Profile.GetProtocol() != interfaces.ProtocolNone {
+			// Case B: Connection-Oriented (TCP) + Hello
+			// Perform Standard Handshake (Wait for Client to send Hello)
+			proto := protocols.NewHelloProtocol()
+
+			// Note: The handshake itself will respect the Deadline set in 1b because it uses Read/Write on the conn.
+			helloMsg, err := proto.WaitInitiation(conn)
+			if err != nil {
+				_ = conn.Close()
+				if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+					// Client closed connection before handshake (e.g. TCP health check, port scan, probe)
+					s.Logger.Debug(fmt.Sprintf("Inbound client disconnected before handshake: %v", err))
+					continue
+				}
+				// Protocol decoding or schema validation failure from an active client
+				s.Logger.Warning(fmt.Sprintf("Inbound client handshake failed: %v", err))
+				return nil, fmt.Errorf("inbound client handshake failed: %w", err)
+			}
+
+			// Wrap with identity
+			conn = NewHandshakeConnection(conn, helloMsg)
+		}
+
+		// 3. Heartbeat Optimization & Safety Ratio
+		heartbeatInterval := s.Config.HeartbeatInterval
+		if heartbeatInterval == 0 {
+			heartbeatInterval = time.Duration(float64(idleTimeout) / 2.5)
+		} else if idleTimeout > 0 && float64(heartbeatInterval)*2.5 > float64(idleTimeout) {
+			// If user provided an unsafe heartbeat (too close to deadline), adjust it
+			newHeartbeat := time.Duration(float64(idleTimeout) / 2.5)
 			s.Logger.Warning(fmt.Sprintf("User HeartbeatInterval (%v) is too close to IdleTimeout (%v). Adjusting to safety ratio: %v",
 				heartbeatInterval, idleTimeout, newHeartbeat))
+			heartbeatInterval = newHeartbeat
 		}
-		heartbeatInterval = newHeartbeat
-	}
 
-	// Threshold Check (Network: 300ms, Local: 150ms, SHM: 50ms)
-	threshold := 300 * time.Millisecond // Default (Networking)
-	addr := s.Profile.GetAddress()
-	isLocal := strings.Contains(addr, "127.0.0.1") || strings.Contains(addr, "localhost")
-	isShm := s.Profile.GetTransport() == interfaces.TransportShm
+		// Threshold Check (Network: 300ms, Local: 150ms, SHM: 50ms)
+		threshold := 300 * time.Millisecond // Default (Networking)
+		addr := s.Profile.GetAddress()
+		isLocal := strings.Contains(addr, "127.0.0.1") || strings.Contains(addr, "localhost")
+		isShm := s.Profile.GetTransport() == interfaces.TransportShm
 
-	transportName := "networking"
-	if isShm {
-		threshold = 50 * time.Millisecond
-		transportName = "shared memory"
-	} else if isLocal {
-		threshold = 150 * time.Millisecond
-		transportName = "local"
-	}
+		transportName := "networking"
+		if isShm {
+			threshold = 50 * time.Millisecond
+			transportName = "shared memory"
+		} else if isLocal {
+			threshold = 150 * time.Millisecond
+			transportName = "local"
+		}
 
-	if idleTimeout > 0 && idleTimeout < threshold {
-		if s.Logger != nil {
+		if idleTimeout > 0 && idleTimeout < threshold {
 			s.Logger.Info(fmt.Sprintf("Heartbeat disabled: IdleTimeout (%v) is below the threshold for %s transport.", idleTimeout, transportName))
+			return NewHeartbeatConnection(conn, 0), nil
 		}
-		return NewHeartbeatConnection(conn, 0), nil
-	}
 
-	return NewHeartbeatConnection(conn, heartbeatInterval), nil
+		return NewHeartbeatConnection(conn, heartbeatInterval), nil
+	}
 }
 
 // -----------------------------------------------------------------------------
@@ -298,7 +305,7 @@ func (c *trackingConnection) Close() error {
 
 // Bind logger to safe-socket
 func (s *SocketServer) SetLogger(logger interfaces.Logger) {
-	s.Logger = logger
+	s.Logger = interfaces.EnsureSafeLogger(logger)
 }
 
 // -----------------------------------------------------------------------------
