@@ -17,6 +17,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -115,6 +116,8 @@ func TestZombieDetection(t *testing.T) {
 		}
 
 		shmServer := NewShmTransport(f2, m, "server", 100*time.Millisecond)
+		atomic.StoreUint64(shmServer.ClientStatus, StatusConnected)
+		atomic.StoreUint64(shmServer.ServerStatus, StatusConnected)
 		_ = shmServer.SetIdleTimeout(0)
 
 		done := make(chan bool, 1)

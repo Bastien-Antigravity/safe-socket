@@ -155,28 +155,28 @@ func (c *SocketClient) attemptOpen() error {
 	heartbeatInterval := c.Config.HeartbeatInterval
 	if heartbeatInterval == 0 {
 		heartbeatInterval = time.Duration(float64(idleTimeout) / 2.5)
+
+		// Threshold Check (Network: 300ms, Local: 150ms, SHM: 50ms)
+		threshold := 300 * time.Millisecond
+		addr := c.Profile.GetAddress()
+		isLocal := utils.GetMachineDetector().IsLocalAddress(addr) || strings.Contains(addr, "localhost")
+		isShm := c.Profile.GetTransport() == interfaces.TransportShm
+
+		if isShm {
+			threshold = 50 * time.Millisecond
+		} else if isLocal {
+			threshold = 150 * time.Millisecond
+		}
+
+		if (idleTimeout > 0 && idleTimeout < threshold) || c.Profile.GetTransport() == interfaces.TransportUDP {
+			heartbeatInterval = 0 // Disabled for auto-negotiation
+		}
 	} else if idleTimeout > 0 && float64(heartbeatInterval)*2.5 > float64(idleTimeout) {
 		// If user provided an unsafe heartbeat (too close to deadline), adjust it
 		newHeartbeat := time.Duration(float64(idleTimeout) / 2.5)
 		c.Logger.Warning(fmt.Sprintf("User HeartbeatInterval (%v) is too close to IdleTimeout (%v). Adjusting to safety ratio: %v",
 			heartbeatInterval, idleTimeout, newHeartbeat))
 		heartbeatInterval = newHeartbeat
-	}
-
-	// Threshold Check (Network: 300ms, Local: 150ms, SHM: 50ms)
-	threshold := 300 * time.Millisecond
-	addr := c.Profile.GetAddress()
-	isLocal := utils.GetMachineDetector().IsLocalAddress(addr) || strings.Contains(addr, "localhost")
-	isShm := c.Profile.GetTransport() == interfaces.TransportShm
-
-	if isShm {
-		threshold = 50 * time.Millisecond
-	} else if isLocal {
-		threshold = 150 * time.Millisecond
-	}
-
-	if (idleTimeout > 0 && idleTimeout < threshold) || c.Profile.GetTransport() == interfaces.TransportUDP {
-		heartbeatInterval = 0 // Disabled
 	}
 
 	c.mu.Lock()

@@ -106,7 +106,10 @@ func TestClientDynamicDeadline(t *testing.T) {
 	defer func() { _ = server.Close() }()
 
 	go func() {
-		conn, _ := server.Accept()
+		conn, err := server.Accept()
+		if err != nil || conn == nil {
+			return
+		}
 		defer func() { _ = conn.Close() }()
 		// Wait 500ms then send
 		time.Sleep(500 * time.Millisecond)
