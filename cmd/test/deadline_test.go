@@ -114,7 +114,10 @@ func TestClientDynamicDeadline(t *testing.T) {
 	}()
 
 	// 2. Setup Client
-	client, _ := factory.Create("tcp", addr, "", "client", true)
+	client, err := factory.Create("tcp", addr, "", "client", true)
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
 	defer func() { _ = client.Close() }()
 
 	// 3. Set Short Deadline (200ms)
@@ -123,7 +126,7 @@ func TestClientDynamicDeadline(t *testing.T) {
 	}
 
 	// 4. Try Receive - Should Timeout
-	_, err := client.Receive()
+	_, err = client.Receive()
 	if err == nil {
 		t.Fatal("Expected timeout on Receive, got success")
 	}
@@ -166,19 +169,27 @@ func TestIdleTimeoutRefresh(t *testing.T) {
 		Deadline: 400 * time.Millisecond,
 	}
 
-	server, _ := factory.CreateSocket(profile, config, "server")
-	_ = server.Listen()
+	server, err := factory.CreateSocket(profile, config, "server")
+	if err != nil {
+		t.Fatalf("Failed to create server: %v", err)
+	}
+	if err := server.Listen(); err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
 	defer func() { _ = server.Close() }()
 
 	done := make(chan struct{})
 	go func() {
-		conn, _ := server.Accept()
+		conn, err := server.Accept()
+		if err != nil {
+			return
+		}
 		defer func() { _ = conn.Close() }()
 
 		// Wait 250ms (before timeout), then Read
 		time.Sleep(250 * time.Millisecond)
 		buf := make([]byte, 1024)
-		_, err := conn.Read(buf)
+		_, err = conn.Read(buf)
 		if err != nil {
 			t.Errorf("Server Read failed (unexpected timeout): %v", err)
 		}
@@ -196,7 +207,10 @@ func TestIdleTimeoutRefresh(t *testing.T) {
 	}()
 
 	// 2. Setup Client
-	client, _ := factory.Create("tcp", addr, "", "client", true)
+	client, err := factory.Create("tcp", addr, "", "client", true)
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
 	defer func() { _ = client.Close() }()
 
 	// 3. Send PINGs to keep it alive

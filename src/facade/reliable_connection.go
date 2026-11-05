@@ -135,9 +135,10 @@ func (c *ReliableConnection) Read(p []byte) (n int, err error) {
 
 		if pType == RudpTypeData {
 			c.mu.Lock()
-			// Update our last remote seq seen
-			if remoteSeq > c.lastRemoteSeq {
-				c.lastRemoteSeq = remoteSeq
+			// Reject implausibly far-future sequence numbers to prevent sequence horizon poisoning
+			if c.lastRemoteSeq > 0 && remoteSeq > c.lastRemoteSeq+4096 {
+				c.mu.Unlock()
+				continue
 			}
 
 			// Deduplication
@@ -145,6 +146,16 @@ func (c *ReliableConnection) Read(p []byte) (n int, err error) {
 				c.mu.Unlock()
 				c.sendAck(remoteSeq)
 				continue
+			}
+			// Also deduplicate packets older than the 30s retention window when sequence has advanced significantly
+			if c.lastRemoteSeq > 4096 && remoteSeq < c.lastRemoteSeq-4096 {
+				c.mu.Unlock()
+				c.sendAck(remoteSeq)
+				continue
+			}
+
+			if remoteSeq > c.lastRemoteSeq {
+				c.lastRemoteSeq = remoteSeq
 			}
 			c.receivedSeqs[remoteSeq] = time.Now()
 			c.mu.Unlock()

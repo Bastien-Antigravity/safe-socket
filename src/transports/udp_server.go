@@ -86,5 +86,8 @@ func (l *UdpListener) Close() error {
 // -----------------------------------------------------------------------------
 
 func (l *UdpListener) Addr() net.Addr {
+	if l.Conn == nil {
+		return nil
+	}
 	return l.Conn.LocalAddr()
 }

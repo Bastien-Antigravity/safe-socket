@@ -23,6 +23,7 @@ package main
 import "C"
 
 import (
+	"fmt"
 	"github.com/Bastien-Antigravity/safe-socket/src/cgo_bridge"
 	"unsafe"
 )
@@ -118,6 +119,7 @@ func SafeSocket_Receive(handle int32, buffer *C.uchar, maxLength C.int) int32 {
 	}
 
 	if len(data) > int(maxLength) {
+		setError(fmt.Errorf("received message (%d bytes) exceeds buffer capacity (%d bytes)", len(data), maxLength))
 		return -1
 	}
 

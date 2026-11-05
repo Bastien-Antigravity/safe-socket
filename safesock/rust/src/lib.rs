@@ -14,8 +14,22 @@
 // =============================================================================
 
 use libc::{c_char, c_int, c_uchar};
+use std::collections::HashMap;
 use std::ffi::{CStr, CString};
+use std::sync::{Mutex, OnceLock};
 use libloading::{Library, Symbol};
+
+fn get_or_load_library(path: &str) -> Result<&'static Library, Box<dyn std::error::Error>> {
+    static LIB_CACHE: OnceLock<Mutex<HashMap<String, &'static Library>>> = OnceLock::new();
+    let cache = LIB_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut map = cache.lock().unwrap();
+    if let Some(&lib) = map.get(path) {
+        return Ok(lib);
+    }
+    let lib = Box::leak(Box::new(unsafe { Library::new(path)? }));
+    map.insert(path.to_string(), lib);
+    Ok(lib)
+}
 
 pub struct SafeSocket {
     lib: &'static Library,
@@ -55,9 +69,9 @@ impl SafeSocket {
             _ => lib_path,
         };
 
-        // We use a static reference and leak the library because Go's runtime 
-        // does not support being unloaded (dlclose) and will hang.
-        let lib = Box::leak(Box::new(unsafe { Library::new(resolved_path)? }));
+        // Cache the leaked Library handle once per resolved_path so repeated socket creations
+        // do not re-load or leak duplicate Library descriptors.
+        let lib = get_or_load_library(resolved_path)?;
         let config = config.unwrap_or_default();
         
         let handle = unsafe {

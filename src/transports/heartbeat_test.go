@@ -78,12 +78,18 @@ func TestFramedTCPHeartbeatRead(t *testing.T) {
 
 func TestFramedTCPHeartbeatReadMessage(t *testing.T) {
 	// Similar test for ReadMessage
-	ln, _ := net.Listen("tcp", "127.0.0.1:0")
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
 	defer func() { _ = ln.Close() }()
 	addr := ln.Addr().String()
 
 	go func() {
-		conn, _ := ln.Accept()
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
 		defer func() { _ = conn.Close() }()
 
 		hb := make([]byte, 4)

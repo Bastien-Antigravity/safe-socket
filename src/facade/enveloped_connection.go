@@ -18,6 +18,7 @@ package facade
 import (
 	"errors"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/Bastien-Antigravity/safe-socket/src/interfaces"
@@ -38,6 +39,7 @@ type EnvelopedConnection struct {
 
 	// LastIdentity holds the identity of the sender of the last packet read.
 	// This allows UDP users to inspect who sent the data.
+	mu           sync.RWMutex
 	LastIdentity *schemas.HelloMsg
 }
 
@@ -75,9 +77,8 @@ func (e *EnvelopedConnection) Write(p []byte) (n int, err error) {
 
 func (e *EnvelopedConnection) Read(p []byte) (n int, err error) {
 	// 1. Read wrapped packet from underlying transport
-	// We need a buffer big enough for the Envelope + Payload.
-	// 4KB default should cover most UDP MTUs + Overhead.
-	rawBuf := make([]byte, 8192)
+	// Max UDP datagram size is 65535 bytes.
+	rawBuf := make([]byte, 65535)
 	nRaw, err := e.Conn.Read(rawBuf)
 	if err != nil {
 		return 0, err
@@ -90,7 +91,9 @@ func (e *EnvelopedConnection) Read(p []byte) (n int, err error) {
 	}
 
 	// Store the identity for inspection
+	e.mu.Lock()
 	e.LastIdentity = identity
+	e.mu.Unlock()
 
 	// 3. Copy Payload to user buffer
 	if len(payload) > len(p) {
@@ -118,17 +121,21 @@ func (e *EnvelopedConnection) ReadMessage() ([]byte, error) {
 	}
 
 	// Store the identity for inspection
+	e.mu.Lock()
 	e.LastIdentity = identity
+	e.mu.Unlock()
 
-	// 3. Return Payload (copy? raw payload is slice of rawBuf usually, but Decapsulate returns slice)
-	// New buffer needed? Decapsulate returns new slice.
-	// We should probably return a copy to be safe if Decapsulate returns slice of rawBuf,
-	// because rawBuf might be reused if optimization happens, but ReadMessage allocates.
-	// So returning slice is fine.
 	return payload, nil
 }
 
 // -----------------------------------------------------------------------------
+
+// GetLastIdentity returns the sender identity of the last decapsulated packet in a thread-safe manner.
+func (e *EnvelopedConnection) GetLastIdentity() *schemas.HelloMsg {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.LastIdentity
+}
 
 func (e *EnvelopedConnection) Close() error {
 	return e.Conn.Close()

@@ -1,6 +1,6 @@
 #include "helpers.h"
 
-char* last_socket_error = NULL;
+_Thread_local char* last_socket_error = NULL;
 
 void set_socket_error(const char* err) {
     if (last_socket_error != NULL) {

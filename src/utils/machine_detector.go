@@ -83,6 +83,9 @@ func (d *MachineDetector) refresh() {
 
 // IsLocalAddress checks if an address ("IP:Port", "host:Port", or "IP") belongs to the local machine.
 func (d *MachineDetector) IsLocalAddress(address string) bool {
+	if d == nil {
+		return false
+	}
 	cleanAddr := strings.TrimSpace(address)
 	if cleanAddr == "" {
 		return true

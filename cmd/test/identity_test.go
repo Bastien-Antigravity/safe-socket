@@ -32,8 +32,8 @@ type MockTransport struct {
 
 func (m *MockTransport) Write(p []byte) (n int, err error)    { return len(p), nil }
 func (m *MockTransport) Close() error                         { return nil }
-func (m *MockTransport) LocalAddr() net.Addr                  { return nil }
-func (m *MockTransport) RemoteAddr() net.Addr                 { return nil }
+func (m *MockTransport) LocalAddr() net.Addr                  { return &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 9000} }
+func (m *MockTransport) RemoteAddr() net.Addr                 { return &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 9001} }
 func (m *MockTransport) ReadMessage() ([]byte, error)         { return nil, nil }
 func (m *MockTransport) SetDeadline(t time.Time) error        { return nil }
 func (m *MockTransport) SetReadDeadline(t time.Time) error    { return nil }

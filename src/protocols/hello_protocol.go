@@ -58,8 +58,14 @@ func (p *HelloProtocol) Initiate(conn interfaces.TransportConnection, profile in
 	}
 
 	// Dynamic Address Resolution from Transport
-	localAddr := conn.LocalAddr().String()
-	remoteAddr := conn.RemoteAddr().String()
+	localAddr := ""
+	if a := conn.LocalAddr(); a != nil {
+		localAddr = a.String()
+	}
+	remoteAddr := ""
+	if a := conn.RemoteAddr(); a != nil {
+		remoteAddr = a.String()
+	}
 
 	advertisedAddr := localAddr
 	if config.ServiceAddress != "" {

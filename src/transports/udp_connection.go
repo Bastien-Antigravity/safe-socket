@@ -171,6 +171,16 @@ func (s *UdpSocket) ReadMessage() ([]byte, error) {
 // -----------------------------------------------------------------------------
 
 func (s *UdpSocket) Close() error {
+	if s.Conn == nil {
+		return nil
+	}
+	// Server-side transient sockets share the listener's *net.UDPConn;
+	// closing a transient socket must not close the underlying listener.
+	if s.TransientRemoteAddr != nil {
+		s.RecvBuf = nil
+		s.Conn = nil
+		return nil
+	}
 	return s.Conn.Close()
 }
 

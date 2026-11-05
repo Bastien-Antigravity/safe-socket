@@ -87,17 +87,24 @@ func (l *ShmListener) Accept() (interfaces.TransportConnection, error) {
 
 	// Wait for client to set ClientStatus to Connected
 	// Using a relatively slow poll here as Accept is not in the hot path.
-	for atomic.LoadUint64(l.transport.ClientStatus) != StatusConnected {
+	for {
 		if l.transport.closed.Load() {
 			return nil, errors.New("listener closed")
 		}
+		l.transport.mmapMu.RLock()
+		if l.transport.closed.Load() {
+			l.transport.mmapMu.RUnlock()
+			return nil, errors.New("listener closed")
+		}
+		status := atomic.LoadUint64(l.transport.ClientStatus)
+		if status == StatusConnected {
+			atomic.StoreUint64(l.transport.ServerStatus, StatusConnected)
+			l.transport.mmapMu.RUnlock()
+			return l.transport, nil
+		}
+		l.transport.mmapMu.RUnlock()
 		time.Sleep(10 * time.Millisecond)
 	}
-
-	// Acknowledge connection
-	atomic.StoreUint64(l.transport.ServerStatus, StatusConnected)
-
-	return l.transport, nil
 }
 
 // -----------------------------------------------------------------------------

@@ -17,6 +17,7 @@ package cgo_bridge
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/Bastien-Antigravity/safe-socket"
@@ -111,16 +112,25 @@ func Receive(handle int32, maxLength int) ([]byte, error) {
 	}
 
 	if sock, ok := val.(interfaces.Socket); ok {
-		return sock.Receive()
-	}
-
-	if conn, ok := val.(interfaces.TransportConnection); ok {
-		tmp := make([]byte, maxLength)
-		n, err := conn.Read(tmp)
+		data, err := sock.Receive()
 		if err != nil {
 			return nil, err
 		}
-		return tmp[:n], nil
+		if maxLength > 0 && len(data) > maxLength {
+			return nil, fmt.Errorf("received message (%d bytes) exceeds buffer capacity (%d bytes)", len(data), maxLength)
+		}
+		return data, nil
+	}
+
+	if conn, ok := val.(interfaces.TransportConnection); ok {
+		data, err := conn.ReadMessage()
+		if err != nil {
+			return nil, err
+		}
+		if maxLength > 0 && len(data) > maxLength {
+			return nil, fmt.Errorf("received message (%d bytes) exceeds buffer capacity (%d bytes)", len(data), maxLength)
+		}
+		return data, nil
 	}
 
 	return nil, errors.New("invalid handle type for Receive")
@@ -184,7 +194,10 @@ func SetDeadline(handle int32, seconds float64) error {
 		return errors.New("invalid handle")
 	}
 
-	deadline := time.Now().Add(time.Duration(seconds * float64(time.Second)))
+	var deadline time.Time
+	if seconds > 0 {
+		deadline = time.Now().Add(time.Duration(seconds * float64(time.Second)))
+	}
 
 	if sock, ok := val.(interfaces.Socket); ok {
 		return sock.SetDeadline(deadline)

@@ -29,6 +29,7 @@ import (
 	"github.com/Bastien-Antigravity/safe-socket/src/models"
 	"github.com/Bastien-Antigravity/safe-socket/src/protocols"
 	"github.com/Bastien-Antigravity/safe-socket/src/transports"
+	"github.com/Bastien-Antigravity/safe-socket/src/utils"
 )
 
 // -----------------------------------------------------------------------------
@@ -197,7 +198,7 @@ func (s *SocketServer) Accept() (interfaces.TransportConnection, error) {
 		// Threshold Check (Network: 300ms, Local: 150ms, SHM: 50ms)
 		threshold := 300 * time.Millisecond // Default (Networking)
 		addr := s.Profile.GetAddress()
-		isLocal := strings.Contains(addr, "127.0.0.1") || strings.Contains(addr, "localhost")
+		isLocal := utils.GetMachineDetector().IsLocalAddress(addr) || strings.Contains(addr, "localhost")
 		isShm := s.Profile.GetTransport() == interfaces.TransportShm
 
 		transportName := "networking"
@@ -209,12 +210,22 @@ func (s *SocketServer) Accept() (interfaces.TransportConnection, error) {
 			transportName = "local"
 		}
 
-		if idleTimeout > 0 && idleTimeout < threshold {
-			s.Logger.Info(fmt.Sprintf("Heartbeat disabled: IdleTimeout (%v) is below the threshold for %s transport.", idleTimeout, transportName))
-			return NewHeartbeatConnection(conn, 0), nil
+		// UDP connections on the server are transient single-datagram handles; do not spawn heartbeat tickers for UDP.
+		if s.Profile.GetTransport() == interfaces.TransportUDP {
+			tracker.setOuter(conn)
+			return conn, nil
 		}
 
-		return NewHeartbeatConnection(conn, heartbeatInterval), nil
+		if idleTimeout > 0 && idleTimeout < threshold {
+			s.Logger.Info(fmt.Sprintf("Heartbeat disabled: IdleTimeout (%v) is below the threshold for %s transport.", idleTimeout, transportName))
+			hbConn := NewHeartbeatConnection(conn, 0)
+			tracker.setOuter(hbConn)
+			return hbConn, nil
+		}
+
+		hbConn := NewHeartbeatConnection(conn, heartbeatInterval)
+		tracker.setOuter(hbConn)
+		return hbConn, nil
 	}
 }
 
@@ -228,7 +239,11 @@ func (s *SocketServer) GetAddr() (string, error) {
 	if s.listener == nil {
 		return "", errors.New("server not listening")
 	}
-	return s.listener.Addr().String(), nil
+	addr := s.listener.Addr()
+	if addr == nil {
+		return "", errors.New("server listener address unavailable")
+	}
+	return addr.String(), nil
 }
 
 // -----------------------------------------------------------------------------
@@ -271,7 +286,7 @@ func (s *SocketServer) Close() error {
 		s.connMu.Unlock()
 
 		for _, c := range conns {
-			_ = c.Close()
+			_ = c.closeOuter()
 		}
 
 		// Wait briefly for wg to drain now that connections are closed
@@ -288,8 +303,26 @@ func (s *SocketServer) Close() error {
 // trackingConnection wraps a TransportConnection to signal when it's closed.
 type trackingConnection struct {
 	interfaces.TransportConnection
-	onClose func()
-	once    sync.Once
+	outerMu   sync.Mutex
+	outerConn interfaces.TransportConnection
+	onClose   func()
+	once      sync.Once
+}
+
+func (c *trackingConnection) setOuter(outer interfaces.TransportConnection) {
+	c.outerMu.Lock()
+	c.outerConn = outer
+	c.outerMu.Unlock()
+}
+
+func (c *trackingConnection) closeOuter() error {
+	c.outerMu.Lock()
+	outer := c.outerConn
+	c.outerMu.Unlock()
+	if outer != nil && outer != c {
+		return outer.Close()
+	}
+	return c.Close()
 }
 
 func (c *trackingConnection) Close() error {

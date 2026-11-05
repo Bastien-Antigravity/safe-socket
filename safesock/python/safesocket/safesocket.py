@@ -177,6 +177,12 @@ class SafeSocketConnection:
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         self.close()
 
+    def __del__(self) -> None:
+        try:
+            self.close()
+        except Exception:
+            pass
+
 # -----------------------------------------------------------------------------------------------
 
 class SafeSocket:
@@ -269,6 +275,12 @@ class SafeSocket:
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         self.close()
+
+    def __del__(self) -> None:
+        try:
+            self.close()
+        except Exception:
+            pass
 
 # ### FACTORIES ###
 

@@ -28,6 +28,7 @@ import (
 	"github.com/Bastien-Antigravity/safe-socket/src/models"
 	"github.com/Bastien-Antigravity/safe-socket/src/protocols"
 	"github.com/Bastien-Antigravity/safe-socket/src/transports"
+	"github.com/Bastien-Antigravity/safe-socket/src/utils"
 	"sync"
 )
 
@@ -165,7 +166,7 @@ func (c *SocketClient) attemptOpen() error {
 	// Threshold Check (Network: 300ms, Local: 150ms, SHM: 50ms)
 	threshold := 300 * time.Millisecond
 	addr := c.Profile.GetAddress()
-	isLocal := strings.Contains(addr, "127.0.0.1") || strings.Contains(addr, "localhost")
+	isLocal := utils.GetMachineDetector().IsLocalAddress(addr) || strings.Contains(addr, "localhost")
 	isShm := c.Profile.GetTransport() == interfaces.TransportShm
 
 	if isShm {
@@ -174,7 +175,7 @@ func (c *SocketClient) attemptOpen() error {
 		threshold = 150 * time.Millisecond
 	}
 
-	if idleTimeout > 0 && idleTimeout < threshold {
+	if (idleTimeout > 0 && idleTimeout < threshold) || c.Profile.GetTransport() == interfaces.TransportUDP {
 		heartbeatInterval = 0 // Disabled
 	}
 

@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-extern char* last_socket_error;
+extern _Thread_local char* last_socket_error;
 
 void set_socket_error(const char* err);
 

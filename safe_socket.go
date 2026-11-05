@@ -69,7 +69,7 @@ func GetIdentity(conn interfaces.TransportConnection) *Identity {
 
 	// 2. Try EnvelopedConnection (UDP Stateless Identity)
 	if ec, ok := conn.(*facade.EnvelopedConnection); ok {
-		return ec.LastIdentity
+		return ec.GetLastIdentity()
 	}
 
 	// 3. Try peeling Heartbeat wrapper

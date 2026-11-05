@@ -23,10 +23,16 @@ import (
 )
 
 func TestDynamicHeartbeatRestart(t *testing.T) {
-	ln, _ := net.Listen("tcp", "127.0.0.1:0")
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
 	defer func() { _ = ln.Close() }()
 
-	clientConn, _ := net.Dial("tcp", ln.Addr().String())
+	clientConn, err := net.Dial("tcp", ln.Addr().String())
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
 	defer func() { _ = clientConn.Close() }()
 
 	// Start with heartbeats enabled
