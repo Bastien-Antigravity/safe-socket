@@ -25,4 +25,10 @@ go test -race ./...
 4. **Section Dividers**: Use `// -----------------------------------------------------------------------------` between exported methods.
 5. **TCP Probe Resilience**: In `SocketServer.Accept()`, 0-byte TCP health checks and port monitors (`io.EOF` / `io.ErrUnexpectedEOF` during handshake) must be cleanly closed and loop continued. Active protocol violations (non-hello traffic) must strictly return an error immediately.
 6. **EnsureSafeLogger Standard**: Injected loggers must always be wrapped with `interfaces.EnsureSafeLogger(l)` in constructors (`NewSocketServer`, `NewSocketClient`) and `SetLogger` to avoid `nil` pointer panics and avoid defensive `if Logger != nil` checks.
+7. **Lock-Free Atomic Telemetry Wrapper (`src/facade/telemetry_wrapper.go`)**:
+   - Real-time connection and frame observability (WireTap) is implemented in a dedicated wrapper file (`src/facade/telemetry_wrapper.go`) and exposed via root package functions `safesocket.SetTelemetryEnabled(bool)`, `safesocket.IsTelemetryEnabled() bool`, and `safesocket.SetTelemetryHook(TelemetryHook)`.
+   - **Strictly Lock-Free**: The enable/disable switch (`telemetryEnabled` via `sync/atomic.Bool`) and hook registration (`telemetryHookHolder` via `sync/atomic.Value`) MUST remain 100% lock-free (zero `sync.Mutex` or channel waits on the I/O path).
+   - **Zero Overhead When Disabled**: When `IsTelemetryEnabled()` is `false`, `wrapConnectionWithTelemetry` and `wrapSocketWithTelemetry` return the underlying connection/socket directly without wrapping or allocating.
+   - **Segregated Channel Extraction**: The wrapper transparently inspects non-binary payload prefixes (e.g., `SYNC_CONFIG`, `LOG_BATCH`, `HEARTBEAT`) and peer `HelloMsg` identities (`FromName()`) without mutating the 4-byte length-prefixed wire protocol.
+
 

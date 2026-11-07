@@ -74,7 +74,14 @@ func TestGetIdentity(t *testing.T) {
 		t.Errorf("GetIdentity failed for EnvelopedConnection: expected %p, got %p", identity, result)
 	}
 
-	// 4. Raw connection (nil result)
+	// 4. Telemetry -> Heartbeat -> Handshake Wrapper
+	tc := facade.NewTelemetryConnection(hb, "server", "tcp", "tcp-hello", "peer_svc", "", "")
+	result = safesocket.GetIdentity(tc)
+	if result != identity {
+		t.Errorf("GetIdentity failed for TelemetryConnection wrapper: expected %p, got %p", identity, result)
+	}
+
+	// 5. Raw connection (nil result)
 	result = safesocket.GetIdentity(mock)
 	if result != nil {
 		t.Errorf("GetIdentity should return nil for raw connection, got %p", result)

@@ -207,6 +207,22 @@ if identity != nil {
 > [!NOTE]
 > For UDP (`udp-hello`), the identity is only available **after** the first packet has been successfully read, as it is extracted from the packet envelope.
 
+### 📡 Lock-Free Real-Time Telemetry Wrapper (WireTap)
+
+`safe-socket` includes a built-in, zero-mutex telemetry wrapper (`src/facade/telemetry_wrapper.go`) used by `microservice-toolbox` WireTap to track live inter-service TCP/TLS/UDP/SHM connections and segregated logical channels in real time:
+
+```go
+// Enable or disable the atomic telemetry wrapper at runtime (zero mutexes)
+safesocket.SetTelemetryEnabled(true)
+
+// Register a callback hook for CONNECT, ACCEPT, SEND, RECV, and CLOSE events
+safesocket.SetTelemetryHook(func(ev safesocket.TelemetryEvent) {
+    // ev.EventType, ev.Profile, ev.LocalService, ev.PeerService, ev.RemoteAddr, ev.Channel, ev.PayloadBytes
+})
+```
+
+When disabled (`safesocket.SetTelemetryEnabled(false)`), the wrapper short-circuits with a single `atomic.Bool` load and zero heap allocations.
+
 
 ## Polyglot SDK Bindings
 

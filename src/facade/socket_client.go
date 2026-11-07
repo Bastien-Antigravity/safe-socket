@@ -179,8 +179,19 @@ func (c *SocketClient) attemptOpen() error {
 		heartbeatInterval = newHeartbeat
 	}
 
+	hbConn := NewHeartbeatConnection(conn, heartbeatInterval)
+	trackedConn := NewTelemetryConnection(
+		hbConn,
+		"client",
+		string(c.Profile.GetTransport()),
+		c.Profile.GetName(),
+		"",
+		"",
+		c.Profile.GetAddress(),
+	)
+
 	c.mu.Lock()
-	c.transport = NewHeartbeatConnection(conn, heartbeatInterval)
+	c.transport = trackedConn
 	c.mu.Unlock()
 	return nil
 }

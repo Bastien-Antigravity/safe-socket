@@ -152,6 +152,7 @@ func (s *SocketServer) Accept() (interfaces.TransportConnection, error) {
 		}
 
 		// 2. Encapsulation / Handshake Logic
+		var peerName string
 		// Case A: UDP + Hello (Stateless Envelope)
 		if s.Profile.GetTransport() == interfaces.TransportUDP &&
 			s.Profile.GetProtocol() == interfaces.ProtocolHello {
@@ -177,6 +178,10 @@ func (s *SocketServer) Accept() (interfaces.TransportConnection, error) {
 				// Protocol decoding or schema validation failure from an active client
 				s.Logger.Warning(fmt.Sprintf("Inbound client handshake failed: %v", err))
 				return nil, fmt.Errorf("inbound client handshake failed: %w", err)
+			}
+
+			if helloMsg != nil {
+				peerName, _ = helloMsg.FromName()
 			}
 
 			// Wrap with identity
@@ -212,20 +217,23 @@ func (s *SocketServer) Accept() (interfaces.TransportConnection, error) {
 
 		// UDP connections on the server are transient single-datagram handles; do not spawn heartbeat tickers for UDP.
 		if s.Profile.GetTransport() == interfaces.TransportUDP {
-			tracker.setOuter(conn)
-			return conn, nil
+			trackedUDP := NewTelemetryConnection(conn, "server", string(s.Profile.GetTransport()), s.Profile.GetName(), peerName, s.Profile.GetAddress(), "")
+			tracker.setOuter(trackedUDP)
+			return trackedUDP, nil
 		}
 
 		if idleTimeout > 0 && idleTimeout < threshold {
 			s.Logger.Info(fmt.Sprintf("Heartbeat disabled: IdleTimeout (%v) is below the threshold for %s transport.", idleTimeout, transportName))
 			hbConn := NewHeartbeatConnection(conn, 0)
-			tracker.setOuter(hbConn)
-			return hbConn, nil
+			trackedConn := NewTelemetryConnection(hbConn, "server", string(s.Profile.GetTransport()), s.Profile.GetName(), peerName, s.Profile.GetAddress(), "")
+			tracker.setOuter(trackedConn)
+			return trackedConn, nil
 		}
 
 		hbConn := NewHeartbeatConnection(conn, heartbeatInterval)
-		tracker.setOuter(hbConn)
-		return hbConn, nil
+		trackedConn := NewTelemetryConnection(hbConn, "server", string(s.Profile.GetTransport()), s.Profile.GetName(), peerName, s.Profile.GetAddress(), "")
+		tracker.setOuter(trackedConn)
+		return trackedConn, nil
 	}
 }
 

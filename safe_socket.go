@@ -77,7 +77,45 @@ func GetIdentity(conn interfaces.TransportConnection) *Identity {
 		return GetIdentity(hb.TransportConnection)
 	}
 
+	// 4. Try peeling TelemetryConnection wrapper
+	if tc, ok := conn.(*facade.TelemetryConnection); ok {
+		return GetIdentity(tc.TransportConnection)
+	}
+
 	return nil
+}
+
+// -----------------------------------------------------------------------------
+
+// Telemetry Switch & Hook Exports (Lock-Free Atomic)
+
+type (
+	TelemetryEvent     = facade.TelemetryEvent
+	TelemetryEventType = facade.TelemetryEventType
+	TelemetryHookFunc  = facade.TelemetryHookFunc
+)
+
+const (
+	TelemetryEventConnect    = facade.TelemetryEventConnect
+	TelemetryEventAccept     = facade.TelemetryEventAccept
+	TelemetryEventRead       = facade.TelemetryEventRead
+	TelemetryEventWrite      = facade.TelemetryEventWrite
+	TelemetryEventDisconnect = facade.TelemetryEventDisconnect
+)
+
+// SetTelemetryEnabled atomically enables or disables real-time connection tracking across safe-socket.
+func SetTelemetryEnabled(enabled bool) {
+	facade.SetTelemetryEnabled(enabled)
+}
+
+// IsTelemetryEnabled atomically returns whether real-time connection tracking is active.
+func IsTelemetryEnabled() bool {
+	return facade.IsTelemetryEnabled()
+}
+
+// SetTelemetryHook atomically registers or clears the non-blocking telemetry callback.
+func SetTelemetryHook(fn TelemetryHookFunc) {
+	facade.SetTelemetryHook(fn)
 }
 
 // -----------------------------------------------------------------------------
