@@ -27,6 +27,7 @@ type mockProfile struct {
 	interfaces.SocketProfile
 }
 
+func (m *mockProfile) GetName() string                        { return "mock" }
 func (m *mockProfile) GetTransport() interfaces.TransportType { return interfaces.TransportFramedTCP }
 func (m *mockProfile) GetAddress() string                     { return "127.0.0.1:0" }
 func (m *mockProfile) GetConnectTimeout() int                 { return 1000 }

@@ -17,6 +17,8 @@ package safesocket
 // =============================================================================
 
 import (
+	"time"
+
 	"github.com/Bastien-Antigravity/safe-socket/src/facade"
 	"github.com/Bastien-Antigravity/safe-socket/src/factory"
 	"github.com/Bastien-Antigravity/safe-socket/src/interfaces"
@@ -116,6 +118,30 @@ func IsTelemetryEnabled() bool {
 // SetTelemetryHook atomically registers or clears the non-blocking telemetry callback.
 func SetTelemetryHook(fn TelemetryHookFunc) {
 	facade.SetTelemetryHook(fn)
+}
+
+// WrapConnectionWithTelemetry returns the raw connection if telemetry is disabled,
+// or wraps it with TelemetryConnection if telemetry is enabled.
+func WrapConnectionWithTelemetry(
+	conn interfaces.TransportConnection,
+	role string,
+	transport string,
+	profileName string,
+	peerName string,
+	localAddr string,
+	remoteAddr string,
+) interfaces.TransportConnection {
+	return facade.WrapConnectionWithTelemetry(conn, role, transport, profileName, peerName, localAddr, remoteAddr)
+}
+
+// FlushTelemetry waits for all queued telemetry events to be dispatched or timeout.
+func FlushTelemetry(timeout time.Duration) bool {
+	return facade.FlushTelemetry(timeout)
+}
+
+// DroppedTelemetryEvents returns the count of dropped events due to buffer saturation.
+func DroppedTelemetryEvents() uint64 {
+	return facade.DroppedTelemetryEvents()
 }
 
 // -----------------------------------------------------------------------------

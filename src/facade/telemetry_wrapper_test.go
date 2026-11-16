@@ -107,6 +107,8 @@ func TestTelemetryWrapperAtomicSwitchAndSegregation(t *testing.T) {
 		t.Fatalf("Close failed: %v", err)
 	}
 
+	FlushTelemetry(500 * time.Millisecond)
+
 	mu.Lock()
 	defer mu.Unlock()
 	if len(events) != 4 {
@@ -129,5 +131,145 @@ func TestTelemetryWrapperAtomicSwitchAndSegregation(t *testing.T) {
 	bSent, bRecv, fSent, fRecv := tc.Stats()
 	if bSent != 14 || bRecv != 11 || fSent != 2 || fRecv != 1 {
 		t.Errorf("unexpected atomic stats: sent=%d/%d, recv=%d/%d", bSent, fSent, bRecv, fRecv)
+	}
+}
+
+func TestTelemetryNonBlockingSlowHook(t *testing.T) {
+	hookEntered := make(chan struct{})
+	SetTelemetryHook(func(ev TelemetryEvent) {
+		select {
+		case hookEntered <- struct{}{}:
+		default:
+		}
+		time.Sleep(100 * time.Millisecond) // Slow consumer
+	})
+	SetTelemetryEnabled(true)
+	defer func() {
+		SetTelemetryEnabled(false)
+		SetTelemetryHook(nil)
+	}()
+
+	mock := &mockTransportConn{readPayload: []byte("payload")}
+	tc := NewTelemetryConnection(mock, "client", "tcp", "tcp-hello", "peer", "", "")
+
+	start := time.Now()
+	// Write must return almost instantly (< 10ms) without waiting for the 100ms slow hook
+	_, err := tc.Write([]byte("quick-write"))
+	duration := time.Since(start)
+
+	if err != nil {
+		t.Fatalf("tc.Write failed: %v", err)
+	}
+	if duration > 20*time.Millisecond {
+		t.Errorf("expected non-blocking Write to return in <20ms, took %v", duration)
+	}
+
+	select {
+	case <-hookEntered:
+	case <-time.After(200 * time.Millisecond):
+		t.Errorf("hook was not executed asynchronously")
+	}
+}
+
+func TestTelemetryPanicResilience(t *testing.T) {
+	SetTelemetryHook(func(ev TelemetryEvent) {
+		panic("deliberate consumer callback panic")
+	})
+	SetTelemetryEnabled(true)
+	defer func() {
+		SetTelemetryEnabled(false)
+		SetTelemetryHook(nil)
+		FlushTelemetry(50 * time.Millisecond)
+	}()
+
+	mock := &mockTransportConn{readPayload: []byte("payload")}
+	tc := NewTelemetryConnection(mock, "client", "tcp", "tcp-hello", "peer", "", "")
+
+	// Write and ReadMessage must not panic
+	n, err := tc.Write([]byte("test-payload"))
+	if err != nil || n != 12 {
+		t.Errorf("unexpected Write result: n=%d err=%v", n, err)
+	}
+
+	FlushTelemetry(50 * time.Millisecond)
+}
+
+func TestZeroOverheadWhenDisabled(t *testing.T) {
+	SetTelemetryEnabled(false)
+	SetTelemetryHook(nil)
+	FlushTelemetry(50 * time.Millisecond)
+	defer SetTelemetryEnabled(false)
+
+	mock := &mockTransportConn{}
+	wrapped := WrapConnectionWithTelemetry(mock, "client", "tcp", "tcp-hello", "peer", "", "")
+
+	// When disabled, WrapConnectionWithTelemetry must return the raw underlying conn directly
+	if wrapped != mock {
+		t.Errorf("expected wrapped to be raw mock connection %p, got %p", mock, wrapped)
+	}
+	if _, ok := wrapped.(*TelemetryConnection); ok {
+		t.Errorf("expected wrapped NOT to be *TelemetryConnection when disabled")
+	}
+
+	// When enabled, it must wrap in *TelemetryConnection
+	SetTelemetryEnabled(true)
+	wrappedEnabled := WrapConnectionWithTelemetry(mock, "client", "tcp", "tcp-hello", "peer", "", "")
+	if _, ok := wrappedEnabled.(*TelemetryConnection); !ok {
+		t.Errorf("expected wrappedEnabled to be *TelemetryConnection when enabled")
+	}
+}
+
+func TestSegregatedChannelExtraction(t *testing.T) {
+	SetTelemetryEnabled(false)
+	SetTelemetryHook(nil)
+	FlushTelemetry(50 * time.Millisecond)
+
+	var mu sync.Mutex
+	var channels []string
+
+	SetTelemetryHook(func(ev TelemetryEvent) {
+		mu.Lock()
+		channels = append(channels, ev.Channel)
+		mu.Unlock()
+	})
+	SetTelemetryEnabled(true)
+	defer func() {
+		SetTelemetryEnabled(false)
+		SetTelemetryHook(nil)
+		FlushTelemetry(50 * time.Millisecond)
+	}()
+
+	mock := &mockTransportConn{}
+	tc := NewTelemetryConnection(mock, "client", "tcp", "tcp-hello", "peer", "", "")
+
+	// Write empty frame -> heartbeat
+	_, _ = tc.Write([]byte{})
+	// Write SYNC_CONFIG -> sync_config
+	_, _ = tc.Write([]byte("SYNC_CONFIG:v1"))
+	// Write LOG_BATCH -> log_batch
+	_, _ = tc.Write([]byte("LOG_BATCH:entry"))
+	// Write standard frame -> frame
+	_, _ = tc.Write([]byte("OTHER_DATA"))
+
+	FlushTelemetry(200 * time.Millisecond)
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	expectedChannels := []string{
+		"safesocket:lifecycle", // connect from NewTelemetryConnection
+		"safesocket:heartbeat",
+		"safesocket:sync_config",
+		"safesocket:log_batch",
+		"safesocket:frame",
+	}
+
+	if len(channels) != len(expectedChannels) {
+		t.Fatalf("expected %d channels, got %d: %v", len(expectedChannels), len(channels), channels)
+	}
+	for i, exp := range expectedChannels {
+		if channels[i] != exp {
+			t.Errorf("channel[%d]: expected %q, got %q", i, exp, channels[i])
+		}
 	}
 }

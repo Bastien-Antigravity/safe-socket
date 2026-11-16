@@ -171,7 +171,7 @@ func (c *SocketClient) attemptOpen() error {
 		if (idleTimeout > 0 && idleTimeout < threshold) || c.Profile.GetTransport() == interfaces.TransportUDP {
 			heartbeatInterval = 0 // Disabled for auto-negotiation
 		}
-	} else if idleTimeout > 0 && float64(heartbeatInterval)*2.5 > float64(idleTimeout) {
+	} else if idleTimeout > 0 && heartbeatInterval < idleTimeout && float64(heartbeatInterval)*2.5 > float64(idleTimeout) {
 		// If user provided an unsafe heartbeat (too close to deadline), adjust it
 		newHeartbeat := time.Duration(float64(idleTimeout) / 2.5)
 		c.Logger.Warning(fmt.Sprintf("User HeartbeatInterval (%v) is too close to IdleTimeout (%v). Adjusting to safety ratio: %v",
@@ -180,11 +180,15 @@ func (c *SocketClient) attemptOpen() error {
 	}
 
 	hbConn := NewHeartbeatConnection(conn, heartbeatInterval)
-	trackedConn := NewTelemetryConnection(
+	profileName := ""
+	if c.Profile != nil {
+		profileName = c.Profile.GetName()
+	}
+	trackedConn := WrapConnectionWithTelemetry(
 		hbConn,
 		"client",
 		string(c.Profile.GetTransport()),
-		c.Profile.GetName(),
+		profileName,
 		"",
 		"",
 		c.Profile.GetAddress(),

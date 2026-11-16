@@ -119,7 +119,15 @@ func (s *SocketServer) Accept() (interfaces.TransportConnection, error) {
 		}
 
 		// 1a. Track connection for synchronous shutdown
+		s.mu.RLock()
+		if s.listener == nil {
+			s.mu.RUnlock()
+			_ = conn.Close()
+			return nil, errors.New("server closed")
+		}
 		s.wg.Add(1)
+		s.mu.RUnlock()
+
 		tracker := &trackingConnection{
 			TransportConnection: conn,
 		}
@@ -192,7 +200,7 @@ func (s *SocketServer) Accept() (interfaces.TransportConnection, error) {
 		heartbeatInterval := s.Config.HeartbeatInterval
 		if heartbeatInterval == 0 {
 			heartbeatInterval = time.Duration(float64(idleTimeout) / 2.5)
-		} else if idleTimeout > 0 && float64(heartbeatInterval)*2.5 > float64(idleTimeout) {
+		} else if idleTimeout > 0 && heartbeatInterval < idleTimeout && float64(heartbeatInterval)*2.5 > float64(idleTimeout) {
 			// If user provided an unsafe heartbeat (too close to deadline), adjust it
 			newHeartbeat := time.Duration(float64(idleTimeout) / 2.5)
 			s.Logger.Warning(fmt.Sprintf("User HeartbeatInterval (%v) is too close to IdleTimeout (%v). Adjusting to safety ratio: %v",
@@ -215,9 +223,14 @@ func (s *SocketServer) Accept() (interfaces.TransportConnection, error) {
 			transportName = "local"
 		}
 
+		profileName := ""
+		if s.Profile != nil {
+			profileName = s.Profile.GetName()
+		}
+
 		// UDP connections on the server are transient single-datagram handles; do not spawn heartbeat tickers for UDP.
 		if s.Profile.GetTransport() == interfaces.TransportUDP {
-			trackedUDP := NewTelemetryConnection(conn, "server", string(s.Profile.GetTransport()), s.Profile.GetName(), peerName, s.Profile.GetAddress(), "")
+			trackedUDP := WrapConnectionWithTelemetry(conn, "server", string(s.Profile.GetTransport()), profileName, peerName, s.Profile.GetAddress(), "")
 			tracker.setOuter(trackedUDP)
 			return trackedUDP, nil
 		}
@@ -225,13 +238,13 @@ func (s *SocketServer) Accept() (interfaces.TransportConnection, error) {
 		if idleTimeout > 0 && idleTimeout < threshold {
 			s.Logger.Info(fmt.Sprintf("Heartbeat disabled: IdleTimeout (%v) is below the threshold for %s transport.", idleTimeout, transportName))
 			hbConn := NewHeartbeatConnection(conn, 0)
-			trackedConn := NewTelemetryConnection(hbConn, "server", string(s.Profile.GetTransport()), s.Profile.GetName(), peerName, s.Profile.GetAddress(), "")
+			trackedConn := WrapConnectionWithTelemetry(hbConn, "server", string(s.Profile.GetTransport()), profileName, peerName, s.Profile.GetAddress(), "")
 			tracker.setOuter(trackedConn)
 			return trackedConn, nil
 		}
 
 		hbConn := NewHeartbeatConnection(conn, heartbeatInterval)
-		trackedConn := NewTelemetryConnection(hbConn, "server", string(s.Profile.GetTransport()), s.Profile.GetName(), peerName, s.Profile.GetAddress(), "")
+		trackedConn := WrapConnectionWithTelemetry(hbConn, "server", string(s.Profile.GetTransport()), profileName, peerName, s.Profile.GetAddress(), "")
 		tracker.setOuter(trackedConn)
 		return trackedConn, nil
 	}

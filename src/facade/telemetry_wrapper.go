@@ -4,21 +4,27 @@ package facade
 // ESSENTIAL PROCESS:
 // Provides a distinct, lock-free atomic switchable telemetry wrapper for
 // safe-socket TransportConnections to track real-time inter-service connections
-// and segregated frame channels (data frames vs heartbeats) with zero overhead
-// when disabled.
+// and segregated frame channels (data frames vs heartbeats vs control frames)
+// with zero overhead when disabled and non-blocking, panic-safe dispatch.
 //
 // DATA FLOW:
 // 1. Input: Underlying TransportConnection, peer identity, and profile metadata.
 // 2. Logic: Performs an atomic.Bool load (<1ns, lock-free) on Read/Write/Close.
-//    When enabled, updates atomic counters and invokes the lock-free atomic hook.
+//    When disabled, WrapConnectionWithTelemetry returns the raw connection with
+//    zero heap allocations and zero decorator hops. When enabled, dispatches
+//    events asynchronously through a bounded non-blocking channel with panic
+//    recovery, guaranteeing zero latency and isolation for the transport I/O path.
 // 3. Output: Real-time TelemetryEvent stream for ecosystem topology tracking.
 //
 // KEY PARAMETERS:
 // - telemetryEnabled: Lock-free atomic.Bool toggle switch.
 // - telemetryHook: Lock-free atomic.Pointer callback for telemetry consumers.
+// - telemetryQueue: Bounded channel for non-blocking asynchronous event delivery.
 // =============================================================================
 
 import (
+	"bytes"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -45,7 +51,7 @@ type TelemetryEvent struct {
 	PeerName    string // Authenticated peer name from HelloMsg (if available)
 	LocalAddr   string
 	RemoteAddr  string
-	Channel     string // Segregated channel e.g. "safesocket:frame", "safesocket:heartbeat"
+	Channel     string // Segregated channel e.g. "safesocket:frame", "safesocket:heartbeat", "safesocket:sync_config", "safesocket:log_batch"
 	Bytes       int
 	HasError    bool
 	Timestamp   time.Time
@@ -54,13 +60,49 @@ type TelemetryEvent struct {
 // TelemetryHookFunc is the non-blocking callback invoked when telemetry is enabled.
 type TelemetryHookFunc func(ev TelemetryEvent)
 
+const defaultTelemetryQueueSize = 8192
+
 var (
 	// telemetryEnabled is the lock-free atomic switch controlling wrapper tracking.
 	telemetryEnabled atomic.Bool
 
 	// telemetryHook stores the registered callback without any mutex locks.
 	telemetryHook atomic.Pointer[TelemetryHookFunc]
+
+	// telemetryQueue buffers events for non-blocking asynchronous dispatch.
+	telemetryQueue = make(chan TelemetryEvent, defaultTelemetryQueueSize)
+
+	// droppedEvents atomically tracks dropped telemetry events when the queue is saturated.
+	droppedEvents atomic.Uint64
+
+	// workerOnce ensures the background worker starts exactly once.
+	workerOnce sync.Once
 )
+
+func init() {
+	ensureTelemetryWorker()
+}
+
+func ensureTelemetryWorker() {
+	workerOnce.Do(func() {
+		go telemetryWorker()
+	})
+}
+
+func telemetryWorker() {
+	for ev := range telemetryQueue {
+		if fnPtr := telemetryHook.Load(); fnPtr != nil && *fnPtr != nil {
+			safeInvokeHook(*fnPtr, ev)
+		}
+	}
+}
+
+func safeInvokeHook(fn TelemetryHookFunc, ev TelemetryEvent) {
+	defer func() {
+		_ = recover() // Catch any panic from consumer hook callback without crashing transport
+	}()
+	fn(ev)
+}
 
 // -----------------------------------------------------------------------------
 
@@ -78,15 +120,94 @@ func IsTelemetryEnabled() bool {
 func SetTelemetryHook(fn TelemetryHookFunc) {
 	if fn == nil {
 		telemetryHook.Store(nil)
+		// Drain any unconsumed events in the queue when clearing hook
+		for len(telemetryQueue) > 0 {
+			select {
+			case <-telemetryQueue:
+			default:
+			}
+		}
 		return
 	}
 	telemetryHook.Store(&fn)
 }
 
 func emitTelemetryEvent(ev TelemetryEvent) {
-	if fnPtr := telemetryHook.Load(); fnPtr != nil && *fnPtr != nil {
-		(*fnPtr)(ev)
+	fnPtr := telemetryHook.Load()
+	if fnPtr == nil || *fnPtr == nil {
+		return
 	}
+	select {
+	case telemetryQueue <- ev:
+	default:
+		droppedEvents.Add(1)
+	}
+}
+
+// FlushTelemetry waits for all currently queued telemetry events to be dispatched,
+// or until the timeout expires. Returns true if the queue was drained within timeout.
+func FlushTelemetry(timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for len(telemetryQueue) > 0 {
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(1 * time.Millisecond)
+	}
+	time.Sleep(5 * time.Millisecond)
+	return true
+}
+
+// DroppedTelemetryEvents returns the total count of telemetry events dropped due to queue saturation.
+func DroppedTelemetryEvents() uint64 {
+	return droppedEvents.Load()
+}
+
+// -----------------------------------------------------------------------------
+
+// detectChannel classifies payload into segregated channels without mutating wire format.
+func detectChannel(payload []byte) string {
+	if len(payload) == 0 {
+		return "safesocket:heartbeat"
+	}
+	if bytes.HasPrefix(payload, []byte("SYNC_CONFIG")) {
+		return "safesocket:sync_config"
+	}
+	if bytes.HasPrefix(payload, []byte("LOG_BATCH")) {
+		return "safesocket:log_batch"
+	}
+	return "safesocket:frame"
+}
+
+// WrapConnectionWithTelemetry returns the raw conn directly if telemetry is disabled,
+// achieving the documented zero-overhead contract with zero heap allocations.
+// If telemetry is enabled, it decorates conn with a TelemetryConnection.
+func WrapConnectionWithTelemetry(
+	conn interfaces.TransportConnection,
+	role string,
+	transport string,
+	profileName string,
+	peerName string,
+	localAddr string,
+	remoteAddr string,
+) interfaces.TransportConnection {
+	if !telemetryEnabled.Load() {
+		return conn
+	}
+	return NewTelemetryConnection(conn, role, transport, profileName, peerName, localAddr, remoteAddr)
+}
+
+// wrapConnectionWithTelemetry is an internal alias matching the AGENTS.md rule naming.
+func wrapConnectionWithTelemetry(
+	conn interfaces.TransportConnection,
+	role string,
+	transport string,
+	profileName string,
+	peerName string,
+	localAddr string,
+	remoteAddr string,
+) interfaces.TransportConnection {
+	return WrapConnectionWithTelemetry(conn, role, transport, profileName, peerName, localAddr, remoteAddr)
 }
 
 // -----------------------------------------------------------------------------
@@ -169,10 +290,7 @@ func (tc *TelemetryConnection) Write(p []byte) (int, error) {
 			tc.bytesSent.Add(uint64(n))
 		}
 		tc.framesSent.Add(1)
-		channel := "safesocket:frame"
-		if len(p) == 0 {
-			channel = "safesocket:heartbeat"
-		}
+		channel := detectChannel(p)
 		emitTelemetryEvent(TelemetryEvent{
 			EventType:   TelemetryEventWrite,
 			Role:        tc.role,
@@ -198,6 +316,12 @@ func (tc *TelemetryConnection) Read(p []byte) (int, error) {
 			tc.bytesRecv.Add(uint64(n))
 		}
 		tc.framesRecv.Add(1)
+		var channel string
+		if n > 0 {
+			channel = detectChannel(p[:n])
+		} else {
+			channel = "safesocket:frame"
+		}
 		emitTelemetryEvent(TelemetryEvent{
 			EventType:   TelemetryEventRead,
 			Role:        tc.role,
@@ -206,7 +330,7 @@ func (tc *TelemetryConnection) Read(p []byte) (int, error) {
 			PeerName:    tc.peerName,
 			LocalAddr:   tc.localAddr,
 			RemoteAddr:  tc.remoteAddr,
-			Channel:     "safesocket:frame",
+			Channel:     channel,
 			Bytes:       n,
 			HasError:    err != nil,
 			Timestamp:   time.Now(),
@@ -224,10 +348,7 @@ func (tc *TelemetryConnection) ReadMessage() ([]byte, error) {
 			tc.bytesRecv.Add(uint64(n))
 		}
 		tc.framesRecv.Add(1)
-		channel := "safesocket:frame"
-		if n == 0 && err == nil {
-			channel = "safesocket:heartbeat"
-		}
+		channel := detectChannel(msg)
 		emitTelemetryEvent(TelemetryEvent{
 			EventType:   TelemetryEventRead,
 			Role:        tc.role,
