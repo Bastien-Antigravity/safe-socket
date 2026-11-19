@@ -1,4 +1,5 @@
-VERSION := $(shell cat VERSION.txt 2>/dev/null || echo "0.0.1")
+VERSION := $(strip $(shell cat VERSION.txt))
+$(if $(VERSION),,$(error VERSION.txt is missing or empty))
 
 .PHONY: all build build-lib core test version clean
 
@@ -10,11 +11,16 @@ version:
 build-lib core:
 	@echo "Building CGO shared library libsafesocket (version $(VERSION))..."
 	@mkdir -p safesock/libsafesocket
-	@if [ "$$(uname -s)" = "Darwin" ]; then \
-		go build -buildmode=c-shared -o safesock/libsafesocket/libsafesocket.dylib ./cmd/libsafesocket; \
-	else \
-		go build -buildmode=c-shared -o safesock/libsafesocket/libsafesocket.so ./cmd/libsafesocket; \
-	fi
+	@OS=$$(uname -s); \
+	case "$$OS" in \
+		Darwin) \
+			go build -buildmode=c-shared -o safesock/libsafesocket/libsafesocket.dylib ./cmd/libsafesocket; \
+			install_name_tool -id @rpath/libsafesocket.dylib safesock/libsafesocket/libsafesocket.dylib 2>/dev/null || true ;; \
+		MINGW*|MSYS*|CYGWIN*|Windows_NT) \
+			go build -buildmode=c-shared -o safesock/libsafesocket/libsafesocket.dll ./cmd/libsafesocket ;; \
+		*) \
+			go build -buildmode=c-shared -o safesock/libsafesocket/libsafesocket.so ./cmd/libsafesocket ;; \
+	esac
 
 build: build-lib
 	@echo "Building repository (version $(VERSION))..."

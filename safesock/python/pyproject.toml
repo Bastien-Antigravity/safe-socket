@@ -27,4 +27,4 @@ where = ["."]
 include = ["safesocket*"]
 
 [tool.setuptools.package-data]
-safesocket = ["*.so", "*.dylib", "*.dll"]
+safesocket = ["*.so", "*.dylib", "*.dll", "*.h"]
