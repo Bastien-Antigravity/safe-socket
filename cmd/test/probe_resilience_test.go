@@ -151,4 +151,3 @@ func TestTCPInvalidProtocolFailsStrictly(t *testing.T) {
 		t.Fatal("Timeout waiting for server to reject invalid protocol handshake")
 	}
 }
-

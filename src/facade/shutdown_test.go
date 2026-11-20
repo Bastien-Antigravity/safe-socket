@@ -129,4 +129,3 @@ func TestShutdownWithUncooperativeClient(t *testing.T) {
 		t.Fatal("DEADLOCK DETECTED: server.Close() failed to unblock with uncooperative client")
 	}
 }
-

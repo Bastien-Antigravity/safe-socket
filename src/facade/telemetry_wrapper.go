@@ -390,4 +390,3 @@ func (tc *TelemetryConnection) Close() error {
 func (tc *TelemetryConnection) Stats() (bytesSent, bytesRecv, framesSent, framesRecv uint64) {
 	return tc.bytesSent.Load(), tc.bytesRecv.Load(), tc.framesSent.Load(), tc.framesRecv.Load()
 }
-

@@ -70,4 +70,3 @@ func (n *NoOpLogger) Warning(string)  {}
 func (n *NoOpLogger) Error(string)    {}
 func (n *NoOpLogger) Critical(string) {}
 func (n *NoOpLogger) Close()          {}
-

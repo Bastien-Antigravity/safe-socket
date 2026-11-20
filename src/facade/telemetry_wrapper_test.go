@@ -41,9 +41,9 @@ func (m *mockTransportConn) RemoteAddr() net.Addr {
 	return &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 9090}
 }
 
-func (m *mockTransportConn) SetDeadline(t time.Time) error      { return nil }
-func (m *mockTransportConn) SetReadDeadline(t time.Time) error  { return nil }
-func (m *mockTransportConn) SetWriteDeadline(t time.Time) error { return nil }
+func (m *mockTransportConn) SetDeadline(t time.Time) error        { return nil }
+func (m *mockTransportConn) SetReadDeadline(t time.Time) error    { return nil }
+func (m *mockTransportConn) SetWriteDeadline(t time.Time) error   { return nil }
 func (m *mockTransportConn) SetIdleTimeout(d time.Duration) error { return nil }
 
 var _ interfaces.TransportConnection = (*mockTransportConn)(nil)
