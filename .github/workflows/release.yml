@@ -6,6 +6,9 @@ on:
   push:
     tags: ['v*']
 
+env:
+  GOPRIVATE: 'github.com/Bastien-Antigravity/*'
+
 jobs:
   build_artifacts:
     name: Build Artifacts on ${{ matrix.os }}
@@ -18,7 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verify Version
+      - name: Verify Tag & Version Parity
         shell: bash
         run: |
           if [ ! -f VERSION.txt ]; then
@@ -30,8 +33,13 @@ jobs:
             echo "ERROR: VERSION.txt is empty!" >&2
             exit 1
           fi
+          EXPECTED_TAG="v${VERSION}"
+          if [ "${GITHUB_REF_NAME}" != "${EXPECTED_TAG}" ]; then
+            echo "ERROR: Release tag '${GITHUB_REF_NAME}' does not match VERSION.txt ('${VERSION}', expected '${EXPECTED_TAG}')" >&2
+            exit 1
+          fi
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-          echo "Release version: $VERSION"
+          echo "Release version verified: $VERSION (tag: $GITHUB_REF_NAME)"
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -47,7 +55,8 @@ jobs:
         shell: bash
         run: |
           if [ -f "go.mod" ]; then
-            grep -E '=> \.\./' go.mod | while read -r line; do
+            dropped_replace=false
+            while IFS= read -r line; do
               target=$(echo "$line" | awk '{print $NF}')
               mod=$(echo "$line" | awk '{print $1}')
               repo_dir=$(basename "$target")
@@ -57,9 +66,13 @@ jobs:
               fi
               if [ ! -d "$target" ]; then
                 echo "Target $target still missing, dropping replace directive for $mod"
-                go mod edit -dropreplace "$mod" || true
+                go mod edit -dropreplace "$mod"
+                dropped_replace=true
               fi
-            done
+            done < <(grep -E '=> \.\./' go.mod || true)
+            if [ "$dropped_replace" = true ]; then
+              GOWORK=off go mod tidy
+            fi
           fi
 
       - name: Build Shared Libraries
@@ -71,13 +84,13 @@ jobs:
             *)       LIB_EXT="so" ;;
           esac
           mkdir -p safesock/libsafesocket
-          go build -buildmode=c-shared -o "safesock/libsafesocket/libsafesocket.${LIB_EXT}" ./cmd/libsafesocket
+          GOWORK=off go build -buildmode=c-shared -o "safesock/libsafesocket/libsafesocket.${LIB_EXT}" ./cmd/libsafesocket
           if [ "${{ runner.os }}" = "macOS" ]; then
             install_name_tool -id @rpath/libsafesocket.dylib safesock/libsafesocket/libsafesocket.dylib 2>/dev/null || true
           fi
           test -f "safesock/libsafesocket/libsafesocket.${LIB_EXT}"
           test -f "safesock/libsafesocket/libsafesocket.h"
-          go build ./...
+          GOWORK=off go build ./...
 
       - name: Package Python SDK
         shell: bash
@@ -102,6 +115,13 @@ jobs:
             python -m build --wheel -C--build-option="--plat-name=${PLAT_TAG}"
             cd - > /dev/null
           done
+
+      - name: Run Unit & Import Smoke Tests
+        shell: bash
+        run: |
+          GOWORK=off go test ./src/utils ./src/interfaces ./src/transports ./src/factory
+          python -m pip install --force-reinstall safesock/python/dist/*.whl
+          python -c "import safesocket; print('safesocket import smoke OK')"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
