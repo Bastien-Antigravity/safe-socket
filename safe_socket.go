@@ -55,6 +55,18 @@ func CreateWithConfig(profileName, address string, config models.SocketConfig, s
 	return factory.CreateWithConfig(profileName, address, config, socketType, autoConnect)
 }
 
+// CreateHybrid creates a socket pre-configured with transport- and deployment-mode-aware
+// hybrid timeouts (0 on SHM; 10m/60s on local TCP; 3m/30s on Docker TCP with 2.5x auto-heartbeats).
+func CreateHybrid(profileName, address, publicIP string, socketType string, autoConnect bool) (Socket, error) {
+	cfg := models.NewHybridSocketConfig(profileName, socketType, publicIP, models.IsDockerRuntime())
+	return factory.CreateWithConfig(profileName, address, cfg, socketType, autoConnect)
+}
+
+// ResolveHybridTimeouts returns the canonical (Deadline, HeartbeatInterval) pair for a transport & mode.
+func ResolveHybridTimeouts(profileName string, socketRole string, isDocker bool) (time.Duration, time.Duration) {
+	return models.ResolveHybridTimeouts(profileName, socketRole, isDocker)
+}
+
 // -----------------------------------------------------------------------------
 
 // GetIdentity extracts the client identity from a potentially wrapped connection.
