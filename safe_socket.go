@@ -26,8 +26,14 @@ import (
 	"github.com/Bastien-Antigravity/safe-socket/src/schemas"
 )
 
-// Socket is an alias for the Facade to simplify usage.
+// Socket is an alias for the unified Facade to simplify usage.
 type Socket = interfaces.Socket
+
+// ClientSocket is the role-segregated client socket interface.
+type ClientSocket = interfaces.ClientSocket
+
+// ServerSocket is the role-segregated server listener interface.
+type ServerSocket = interfaces.ServerSocket
 
 // Identity is an alias for the HelloMsg schema to simplify usage.
 type Identity = schemas.HelloMsg
@@ -53,6 +59,26 @@ func Create(profileName, address, publicIP string, socketType string, autoConnec
 // Use this to set Deadlines or other advanced config options.
 func CreateWithConfig(profileName, address string, config models.SocketConfig, socketType string, autoConnect bool) (Socket, error) {
 	return factory.CreateWithConfig(profileName, address, config, socketType, autoConnect)
+}
+
+// CreateClient creates a role-segregated ClientSocket using hybrid defaults.
+func CreateClient(profileName, address, publicIP string, autoConnect bool) (ClientSocket, error) {
+	return factory.CreateClient(profileName, address, publicIP, autoConnect)
+}
+
+// CreateClientWithConfig creates a role-segregated ClientSocket with explicit configuration.
+func CreateClientWithConfig(profileName, address string, config models.SocketConfig, autoConnect bool) (ClientSocket, error) {
+	return factory.CreateClientWithConfig(profileName, address, config, autoConnect)
+}
+
+// CreateServer creates a role-segregated ServerSocket using hybrid defaults.
+func CreateServer(profileName, address, publicIP string, autoConnect bool) (ServerSocket, error) {
+	return factory.CreateServer(profileName, address, publicIP, autoConnect)
+}
+
+// CreateServerWithConfig creates a role-segregated ServerSocket with explicit configuration.
+func CreateServerWithConfig(profileName, address string, config models.SocketConfig, autoConnect bool) (ServerSocket, error) {
+	return factory.CreateServerWithConfig(profileName, address, config, autoConnect)
 }
 
 // CreateHybrid creates a socket pre-configured with transport- and deployment-mode-aware

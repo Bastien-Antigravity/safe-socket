@@ -15,6 +15,7 @@ package test
 // =============================================================================
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -22,10 +23,12 @@ import (
 	"encoding/pem"
 	"fmt"
 	"math/big"
+	"net"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/Bastien-Antigravity/safe-socket"
 	"github.com/Bastien-Antigravity/safe-socket/src/facade"
 	"github.com/Bastien-Antigravity/safe-socket/src/factory"
 	"github.com/Bastien-Antigravity/safe-socket/src/models"
@@ -38,7 +41,7 @@ import (
 
 // TestTCP_Raw Verifies basic TCP send/receive using the Factory
 func TestTCP_Raw(t *testing.T) {
-	addr := "127.0.0.1:9003" // Port 9003
+	addr := freeTCPAddr(t)
 
 	// 1. Start Server
 	server, err := factory.Create("tcp", addr, "", "server", true)
@@ -114,7 +117,7 @@ func TestTCP_Raw(t *testing.T) {
 
 // TestTCP_Raw_Write_Method Verifies the new Write() method (Send alias)
 func TestTCP_Raw_Write_Method(t *testing.T) {
-	addr := "127.0.0.1:9010" // Distinct port
+	addr := freeTCPAddr(t)
 
 	// 1. Start Server
 	server, err := factory.Create("tcp", addr, "", "server", true)
@@ -173,7 +176,7 @@ func TestTCP_Raw_Write_Method(t *testing.T) {
 
 // TestTCP_Hello Verifies TCP with Hello Protocol Handshake
 func TestTCP_Hello(t *testing.T) {
-	addr := "127.0.0.1:9004" // Port 9004
+	addr := freeTCPAddr(t)
 
 	// 1. Start Server
 	server, err := factory.Create("tcp-hello:test-server", addr, "127.0.0.1", "server", true)
@@ -247,7 +250,7 @@ func TestTCP_Hello(t *testing.T) {
 
 // TestUDP_Raw Verifies basic UDP send/receive using the Factory
 func TestUDP_Raw(t *testing.T) {
-	addr := "127.0.0.1:9001"
+	addr := freeUDPAddr(t)
 
 	// 1. Start Server
 	server, err := factory.Create("udp", addr, "", "server", true)
@@ -264,6 +267,7 @@ func TestUDP_Raw(t *testing.T) {
 			errChan <- fmt.Errorf("Accept failed: %v", err)
 			return
 		}
+		defer func() { _ = conn.Close() }()
 
 		buf := make([]byte, 1024)
 		n, err := conn.Read(buf)
@@ -310,7 +314,7 @@ func TestUDP_Raw(t *testing.T) {
 
 // TestUDP_Hello Verifies UDP with Hello Protocol + Stateless Envelope
 func TestUDP_Hello(t *testing.T) {
-	addr := "127.0.0.1:9002"
+	addr := freeUDPAddr(t)
 
 	// 1. Start Server
 	server, err := factory.Create("udp-hello:test-udp-server", addr, "", "server", true)
@@ -385,7 +389,7 @@ func TestUDP_Hello(t *testing.T) {
 
 // TestUDP_Reliable Verifies UDP with Reliability Layer (ACKs/Retries)
 func TestUDP_Reliable(t *testing.T) {
-	addr := "127.0.0.1:9003"
+	addr := freeUDPAddr(t)
 
 	// 1. Start Server with Reliable: true
 	config := models.SocketConfig{
@@ -454,6 +458,109 @@ func TestUDP_Reliable(t *testing.T) {
 	}
 }
 
+// TestUDP_LargePacketAndMultiPacketSession verifies UDP server accepts >4KB datagrams
+// without truncation and demultiplexes multi-packet Reliable UDP conversations.
+func TestUDP_LargePacketAndMultiPacketSession(t *testing.T) {
+	// 1. Large datagram > 4KB (16KB)
+	addrLarge := freeUDPAddr(t)
+	server, err := factory.Create("udp", addrLarge, "", "server", true)
+	if err != nil {
+		t.Fatalf("Failed to create UDP server: %v", err)
+	}
+	defer func() { _ = server.Close() }()
+
+	largePayload := bytes.Repeat([]byte("ABCD"), 4096) // 16,384 bytes (> 4096)
+	errChan := make(chan error, 1)
+	go func() {
+		conn, err := server.Accept()
+		if err != nil {
+			errChan <- err
+			return
+		}
+		defer func() { _ = conn.Close() }()
+		msg, err := conn.ReadMessage()
+		if err != nil {
+			errChan <- err
+			return
+		}
+		if !bytes.Equal(msg, largePayload) {
+			errChan <- fmt.Errorf("expected %d bytes, got %d bytes", len(largePayload), len(msg))
+			return
+		}
+		errChan <- nil
+	}()
+
+	client, err := factory.Create("udp", addrLarge, "", "client", true)
+	if err != nil {
+		t.Fatalf("Failed to create UDP client: %v", err)
+	}
+	defer func() { _ = client.Close() }()
+
+	if err := client.Send(largePayload); err != nil {
+		t.Fatalf("Failed to send 16KB UDP datagram: %v", err)
+	}
+	if err := <-errChan; err != nil {
+		t.Fatalf("Large UDP datagram test failed: %v", err)
+	}
+
+	// 2. Multi-packet Reliable UDP session: verify server receives 5 sequential messages on the same accepted conn
+	addrMulti := freeUDPAddr(t)
+	cfg := models.SocketConfig{Reliable: true, Deadline: 2 * time.Second}
+	rServer, err := factory.CreateWithConfig("udp", addrMulti, cfg, "server", true)
+	if err != nil {
+		t.Fatalf("Failed to create Reliable UDP server: %v", err)
+	}
+	defer func() { _ = rServer.Close() }()
+
+	multiErr := make(chan error, 1)
+	go func() {
+		conn, err := rServer.Accept()
+		if err != nil {
+			multiErr <- err
+			return
+		}
+		defer func() { _ = conn.Close() }()
+
+		for i := 0; i < 5; i++ {
+			msg, err := conn.ReadMessage()
+			if err != nil {
+				multiErr <- fmt.Errorf("packet %d read failed: %v", i, err)
+				return
+			}
+			expected := fmt.Sprintf("MULTI_PKT_%d", i)
+			if string(msg) != expected {
+				multiErr <- fmt.Errorf("packet %d mismatch: got %q, want %q", i, string(msg), expected)
+				return
+			}
+		}
+		_, err = conn.Write([]byte("MULTI_ACK_DONE"))
+		multiErr <- err
+	}()
+
+	rClient, err := factory.CreateWithConfig("udp", addrMulti, cfg, "client", true)
+	if err != nil {
+		t.Fatalf("Failed to create Reliable UDP client: %v", err)
+	}
+	defer func() { _ = rClient.Close() }()
+
+	for i := 0; i < 5; i++ {
+		if err := rClient.Send([]byte(fmt.Sprintf("MULTI_PKT_%d", i))); err != nil {
+			t.Fatalf("Failed to send packet %d: %v", i, err)
+		}
+	}
+
+	resp, err := rClient.Receive()
+	if err != nil {
+		t.Fatalf("Client receive failed: %v", err)
+	}
+	if string(resp) != "MULTI_ACK_DONE" {
+		t.Fatalf("Unexpected response: %q", string(resp))
+	}
+	if err := <-multiErr; err != nil {
+		t.Fatalf("Multi-packet Reliable UDP server error: %v", err)
+	}
+}
+
 // TestSHM_FullExchange Verifies server/client exchange via SHM
 func TestSHM_FullExchange(t *testing.T) {
 	path := "test_shm_exchange"
@@ -519,13 +626,90 @@ func TestSHM_FullExchange(t *testing.T) {
 	}
 }
 
+// TestSHM_HelloIdentityAndReconnect verifies shm-hello preserves service identity
+// (distinct from file path) and allows subsequent client reconnections after close.
+func TestSHM_HelloIdentityAndReconnect(t *testing.T) {
+	path := "test_shm_hello_reconnect"
+	defer func() { _ = os.Remove(path) }()
+
+	server, err := factory.Create("shm-hello:shm-srv", path, "", "server", true)
+	if err != nil {
+		t.Fatalf("Failed to create SHM Hello server: %v", err)
+	}
+	defer func() { _ = server.Close() }()
+
+	// Round 1 & Round 2: two sequential client sessions against the same SHM listener
+	for round := 1; round <= 2; round++ {
+		expectedIdentity := fmt.Sprintf("my-shm-client-%d", round)
+		expectedMsg := fmt.Sprintf("SHM_HELLO_%d", round)
+
+		errChan := make(chan error, 1)
+		go func() {
+			conn, err := server.Accept()
+			if err != nil {
+				errChan <- fmt.Errorf("round %d accept failed: %v", round, err)
+				return
+			}
+			defer func() { _ = conn.Close() }()
+
+			id := safesocket.GetIdentity(conn)
+			if id == nil {
+				errChan <- fmt.Errorf("round %d missing handshake identity", round)
+				return
+			}
+			name, _ := id.FromName()
+			if name != expectedIdentity {
+				errChan <- fmt.Errorf("round %d expected identity %q, got %q", round, expectedIdentity, name)
+				return
+			}
+
+			msg, err := conn.ReadMessage()
+			if err != nil {
+				errChan <- fmt.Errorf("round %d read failed: %v", round, err)
+				return
+			}
+			if string(msg) != expectedMsg {
+				errChan <- fmt.Errorf("round %d unexpected msg %q", round, string(msg))
+				return
+			}
+			_, err = conn.Write([]byte("OK"))
+			errChan <- err
+		}()
+
+		client, err := factory.Create("shm-hello:"+expectedIdentity, path, "", "client", true)
+		if err != nil {
+			t.Fatalf("round %d client open failed: %v", round, err)
+		}
+		if err := client.Send([]byte(expectedMsg)); err != nil {
+			t.Fatalf("round %d client send failed: %v", round, err)
+		}
+		resp, err := client.Receive()
+		if err != nil {
+			t.Fatalf("round %d client receive failed: %v", round, err)
+		}
+		if string(resp) != "OK" {
+			t.Fatalf("round %d unexpected response %q", round, string(resp))
+		}
+		_ = client.Close()
+
+		select {
+		case err := <-errChan:
+			if err != nil {
+				t.Fatal(err)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("round %d timed out waiting for server", round)
+		}
+	}
+}
+
 // -----------------------------------------------------------------------------
 // TLS Tests
 // -----------------------------------------------------------------------------
 
 // TestTLS_Hello Verifies TCP with TLS and Hello Protocol
 func TestTLS_Hello(t *testing.T) {
-	addr := "127.0.0.1:9004"
+	addr := freeTCPAddr(t)
 
 	// 1. Generate Certificates
 	certFile := "test_server.crt"
@@ -609,6 +793,28 @@ func TestTLS_Hello(t *testing.T) {
 // -----------------------------------------------------------------------------
 // Helpers
 // -----------------------------------------------------------------------------
+
+func freeTCPAddr(t *testing.T) string {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to allocate ephemeral TCP port: %v", err)
+	}
+	addr := ln.Addr().String()
+	_ = ln.Close()
+	return addr
+}
+
+func freeUDPAddr(t *testing.T) string {
+	t.Helper()
+	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to allocate ephemeral UDP port: %v", err)
+	}
+	addr := pc.LocalAddr().String()
+	_ = pc.Close()
+	return addr
+}
 
 func generateSelfSignedCert(certPath, keyPath string) error {
 	priv, err := rsa.GenerateKey(rand.Reader, 2048)

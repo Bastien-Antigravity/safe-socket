@@ -3,16 +3,17 @@ package transports
 // =============================================================================
 // ESSENTIAL PROCESS:
 // Implements lock-free single-producer single-consumer (SPSC) shared memory (SHM)
-// ring buffers via memory-mapped files (mmap) for ultra-low latency IPC.
+// ring buffers via memory-mapped files (mmap) with producer/consumer synchronization
+// and adaptive spin-sleep backoff for ultra-low latency IPC.
 //
 // DATA FLOW:
 // 1. Input: Byte slices to write into bidirectional memory-mapped ring buffers.
-// 2. Logic: Uses atomic CAS/load/store operations on head and tail pointer offsets;
-//    reads framed payloads with exponential backoff and yielding.
-// 3. Output: Zero-copy/low-overhead payload delivery between local host processes.
+// 2. Logic: Serializes concurrent writers/readers with local mutexes, coordinates
+//    cross-process head/tail offsets atomically, and backs off adaptively when idle.
+// 3. Output: Framed payload delivery between local host processes.
 //
 // KEY PARAMETERS:
-// - ShmSocket: TransportConnection implementation backed by memory-mapped file.
+// - ShmTransport: TransportConnection implementation backed by memory-mapped file.
 // - BufferDataSize: 32MB buffer capacity per direction.
 // =============================================================================
 
@@ -21,6 +22,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -83,7 +85,11 @@ type ShmTransport struct {
 	writeDeadline            atomic.Int64
 	idleTimeout              time.Duration
 	closed                   atomic.Bool
-	mmapMu                   sync.RWMutex
+	unmapped                 *atomic.Bool
+	mmapMu                   *sync.RWMutex
+	writeMu                  sync.Mutex
+	readMu                   sync.Mutex
+	onClose                  func() error
 }
 
 // -----------------------------------------------------------------------------
@@ -141,6 +147,8 @@ func NewShmTransport(f *os.File, m mmap.MMap, role string, timeout time.Duration
 		PeerActivity:             peerActivity,
 		lastObservedPeerActivity: atomic.LoadUint64(peerActivity),
 		idleTimeout:              timeout,
+		unmapped:                 &atomic.Bool{},
+		mmapMu:                   &sync.RWMutex{},
 	}
 
 	if timeout > 0 {
@@ -149,6 +157,50 @@ func NewShmTransport(f *os.File, m mmap.MMap, role string, timeout time.Duration
 	}
 
 	return t
+}
+
+// newSessionHandle creates a per-client session view sharing the listener's mmap and synchronization
+// without owning the underlying File/MMap unmap lifecycle.
+func (t *ShmTransport) newSessionHandle(timeout time.Duration, onClose func() error) *ShmTransport {
+	s := &ShmTransport{
+		File:                     t.File,
+		MMap:                     t.MMap,
+		Role:                     t.Role,
+		ProduceHead:              t.ProduceHead,
+		ProduceTail:              t.ProduceTail,
+		ConsumeHead:              t.ConsumeHead,
+		ConsumeTail:              t.ConsumeTail,
+		ProduceData:              t.ProduceData,
+		ConsumeData:              t.ConsumeData,
+		ServerStatus:             t.ServerStatus,
+		ClientStatus:             t.ClientStatus,
+		MyActivity:               t.MyActivity,
+		PeerActivity:             t.PeerActivity,
+		lastObservedPeerActivity: atomic.LoadUint64(t.PeerActivity),
+		idleTimeout:              timeout,
+		unmapped:                 t.unmapped,
+		mmapMu:                   t.mmapMu,
+		onClose:                  onClose,
+	}
+	if timeout > 0 {
+		s.readDeadline.Store(time.Now().Add(timeout).UnixNano())
+		s.writeDeadline.Store(time.Now().Add(timeout).UnixNano())
+	}
+	return s
+}
+
+func shmSpinWait(spin *int) {
+	*spin++
+	switch {
+	case *spin <= 16:
+		runtime.Gosched()
+	case *spin <= 64:
+		time.Sleep(1 * time.Microsecond)
+	case *spin <= 256:
+		time.Sleep(10 * time.Microsecond)
+	default:
+		time.Sleep(50 * time.Microsecond)
+	}
 }
 
 func (t *ShmTransport) refreshReadDeadline() {
@@ -218,8 +270,11 @@ func (t *ShmTransport) SetWriteDeadline(deadline time.Time) error {
 
 // -----------------------------------------------------------------------------
 
-// Write (Producer Role)
+// Write (Producer Role, synchronized across goroutines within this process).
 func (t *ShmTransport) Write(p []byte) (n int, err error) {
+	t.writeMu.Lock()
+	defer t.writeMu.Unlock()
+
 	lenData := uint64(len(p))
 	// Framing: 4-byte header
 	totalLen := 4 + lenData
@@ -228,13 +283,14 @@ func (t *ShmTransport) Write(p []byte) (n int, err error) {
 		return 0, io.ErrShortBuffer
 	}
 
+	spin := 0
 	for {
-		if t.closed.Load() {
+		if t.closed.Load() || t.unmapped.Load() {
 			return 0, io.ErrClosedPipe
 		}
 
 		t.mmapMu.RLock()
-		if t.closed.Load() {
+		if t.closed.Load() || t.unmapped.Load() {
 			t.mmapMu.RUnlock()
 			return 0, io.ErrClosedPipe
 		}
@@ -248,14 +304,14 @@ func (t *ShmTransport) Write(p []byte) (n int, err error) {
 			if wd > 0 && time.Now().UnixNano() > wd {
 				return 0, os.ErrDeadlineExceeded
 			}
-			time.Sleep(1 * time.Microsecond)
+			shmSpinWait(&spin)
 			continue
 		}
 
 		// 1. Write Header (4 bytes, BigEndian)
-		header := make([]byte, 4)
-		binary.BigEndian.PutUint32(header, uint32(lenData))
-		t.writeToRing(tail, header)
+		var header [4]byte
+		binary.BigEndian.PutUint32(header[:], uint32(lenData))
+		t.writeToRing(tail, header[:])
 
 		// 2. Write Data
 		if lenData > 0 {
@@ -289,17 +345,32 @@ func (t *ShmTransport) writeToRing(offset uint64, p []byte) {
 
 // -----------------------------------------------------------------------------
 
-// Read (Consumer Role)
+// Read (Consumer Role) reads a framed payload into the caller's slice p.
 func (t *ShmTransport) Read(p []byte) (n int, err error) {
+	_, n, err = t.readFrame(p, false)
+	return n, err
+}
+
+// ReadMessage for SHM reads exactly one frame into a newly allocated buffer.
+func (t *ShmTransport) ReadMessage() ([]byte, error) {
+	buf, _, err := t.readFrame(nil, true)
+	return buf, err
+}
+
+func (t *ShmTransport) readFrame(dst []byte, allocate bool) ([]byte, int, error) {
+	t.readMu.Lock()
+	defer t.readMu.Unlock()
+
+	spin := 0
 	for {
-		if t.closed.Load() {
-			return 0, io.EOF
+		if t.closed.Load() || t.unmapped.Load() {
+			return nil, 0, io.EOF
 		}
 
 		t.mmapMu.RLock()
-		if t.closed.Load() {
+		if t.closed.Load() || t.unmapped.Load() {
 			t.mmapMu.RUnlock()
-			return 0, io.EOF
+			return nil, 0, io.EOF
 		}
 
 		tail := atomic.LoadUint64(t.ConsumeTail)
@@ -312,7 +383,7 @@ func (t *ShmTransport) Read(p []byte) (n int, err error) {
 				(t.Role == "server" && atomic.LoadUint64(t.ClientStatus) == StatusIdle)
 			if peerClosed {
 				t.mmapMu.RUnlock()
-				return 0, io.EOF
+				return nil, 0, io.EOF
 			}
 
 			// HEARTBEAT AUDIT FIX: Check if peer is active even without data
@@ -325,20 +396,20 @@ func (t *ShmTransport) Read(p []byte) (n int, err error) {
 
 			rd := t.readDeadline.Load()
 			if rd > 0 && time.Now().UnixNano() > rd {
-				return 0, os.ErrDeadlineExceeded
+				return nil, 0, os.ErrDeadlineExceeded
 			}
-			time.Sleep(1 * time.Microsecond)
+			shmSpinWait(&spin)
 			continue
 		}
 
 		// 1. Read Header
-		header := make([]byte, 4)
-		t.readFromRing(head, header)
-		length := uint64(binary.BigEndian.Uint32(header))
+		var header [4]byte
+		t.readFromRing(head, header[:])
+		length := uint64(binary.BigEndian.Uint32(header[:]))
 
 		if 4+length > BufferDataSize {
 			t.mmapMu.RUnlock()
-			return 0, io.ErrShortBuffer
+			return nil, 0, io.ErrShortBuffer
 		}
 
 		// 2. Check if entire frame is available
@@ -346,10 +417,9 @@ func (t *ShmTransport) Read(p []byte) (n int, err error) {
 			t.mmapMu.RUnlock()
 			rd := t.readDeadline.Load()
 			if rd > 0 && time.Now().UnixNano() > rd {
-				return 0, os.ErrDeadlineExceeded
+				return nil, 0, os.ErrDeadlineExceeded
 			}
-			// Frame incomplete, wait
-			time.Sleep(1 * time.Microsecond)
+			shmSpinWait(&spin)
 			continue
 		}
 
@@ -358,22 +428,29 @@ func (t *ShmTransport) Read(p []byte) (n int, err error) {
 			atomic.AddUint64(t.ConsumeHead, 4)
 			t.refreshReadDeadline()
 			t.mmapMu.RUnlock()
+			spin = 0
 			continue
 		}
 
 		// 4. Read Body
-		if uint64(len(p)) < length {
+		if !allocate {
+			if uint64(len(dst)) < length {
+				t.mmapMu.RUnlock()
+				return nil, 0, io.ErrShortBuffer
+			}
+			t.readFromRing(head+4, dst[:length])
+			atomic.AddUint64(t.ConsumeHead, 4+length)
+			t.refreshReadDeadline()
 			t.mmapMu.RUnlock()
-			return 0, io.ErrShortBuffer
+			return nil, int(length), nil
 		}
 
-		t.readFromRing(head+4, p[:length])
-
+		buf := make([]byte, length)
+		t.readFromRing(head+4, buf)
 		atomic.AddUint64(t.ConsumeHead, 4+length)
 		t.refreshReadDeadline()
 		t.mmapMu.RUnlock()
-
-		return int(length), nil
+		return buf, int(length), nil
 	}
 }
 
@@ -393,97 +470,20 @@ func (t *ShmTransport) readFromRing(offset uint64, p []byte) {
 
 // -----------------------------------------------------------------------------
 
-// ReadMessage for SHM reads exactly one frame.
-func (t *ShmTransport) ReadMessage() ([]byte, error) {
-	for {
-		if t.closed.Load() {
-			return nil, io.EOF
-		}
-
-		t.mmapMu.RLock()
-		if t.closed.Load() {
-			t.mmapMu.RUnlock()
-			return nil, io.EOF
-		}
-
-		tail := atomic.LoadUint64(t.ConsumeTail)
-		head := atomic.LoadUint64(t.ConsumeHead)
-
-		if tail-head < 4 {
-			// Check if peer cleanly closed the connection
-			peerClosed := (t.Role == "client" && atomic.LoadUint64(t.ServerStatus) == StatusIdle) ||
-				(t.Role == "server" && atomic.LoadUint64(t.ClientStatus) == StatusIdle)
-			if peerClosed {
-				t.mmapMu.RUnlock()
-				return nil, io.EOF
-			}
-
-			// HEARTBEAT AUDIT FIX: Check if peer is active even without data
-			activity := atomic.LoadUint64(t.PeerActivity)
-			if activity > t.lastObservedPeerActivity {
-				t.refreshReadDeadline()
-				t.lastObservedPeerActivity = activity
-			}
-			t.mmapMu.RUnlock()
-
-			rd := t.readDeadline.Load()
-			if rd > 0 && time.Now().UnixNano() > rd {
-				return nil, os.ErrDeadlineExceeded
-			}
-			time.Sleep(1 * time.Microsecond)
-			continue
-		}
-
-		// 1. Read Header
-		header := make([]byte, 4)
-		t.readFromRing(head, header)
-		length := uint64(binary.BigEndian.Uint32(header))
-
-		if 4+length > BufferDataSize {
-			t.mmapMu.RUnlock()
-			return nil, io.ErrShortBuffer
-		}
-
-		// 2. Check if entire frame is available
-		if tail-head < 4+length {
-			t.mmapMu.RUnlock()
-			rd := t.readDeadline.Load()
-			if rd > 0 && time.Now().UnixNano() > rd {
-				return nil, os.ErrDeadlineExceeded
-			}
-			time.Sleep(1 * time.Microsecond)
-			continue
-		}
-
-		// 3. Handle Heartbeats (Length 0)
-		if length == 0 {
-			atomic.AddUint64(t.ConsumeHead, 4)
-			t.refreshReadDeadline()
-			t.mmapMu.RUnlock()
-			continue
-		}
-
-		// 4. Allocate and Read Body
-		buf := make([]byte, length)
-		t.readFromRing(head+4, buf)
-
-		atomic.AddUint64(t.ConsumeHead, 4+length)
-		t.refreshReadDeadline()
-		t.mmapMu.RUnlock()
-		return buf, nil
-	}
-}
-
-// -----------------------------------------------------------------------------
-
 func (t *ShmTransport) Close() error {
 	// Mark as closed BEFORE unmapping to stop spin-loops safely
 	if t.closed.Swap(true) {
 		return nil // Already closed
 	}
 
+	if t.onClose != nil {
+		return t.onClose()
+	}
+
 	t.mmapMu.Lock()
 	defer t.mmapMu.Unlock()
+
+	t.unmapped.Store(true)
 
 	if t.Role == "client" && t.ClientStatus != nil {
 		atomic.StoreUint64(t.ClientStatus, StatusIdle)
@@ -491,9 +491,8 @@ func (t *ShmTransport) Close() error {
 		atomic.StoreUint64(t.ServerStatus, StatusIdle)
 	}
 
-	// Flush? MMap usually syncs periodically.
 	if err := t.MMap.Unmap(); err != nil {
-		_ = t.File.Close() // Best effort close file
+		_ = t.File.Close()
 		return err
 	}
 	return t.File.Close()

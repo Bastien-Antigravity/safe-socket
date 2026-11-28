@@ -89,18 +89,13 @@ func ResolveHybridTimeouts(profileName string, socketRole string, isDocker bool)
 
 // -----------------------------------------------------------------------------
 
-// NewHybridSocketConfig constructs a SocketConfig pre-populated with hybrid transport/mode timeouts
-// and infinite reconnect resilience (MaxRetries: -1) for clients.
+// NewHybridSocketConfig constructs a SocketConfig pre-populated with hybrid transport/mode timeouts.
 func NewHybridSocketConfig(profileName string, socketRole string, publicIP string, isDocker bool) SocketConfig {
 	deadline, heartbeat := ResolveHybridTimeouts(profileName, socketRole, isDocker)
-	maxRetries := 0
-	if !strings.EqualFold(strings.TrimSpace(socketRole), "server") {
-		maxRetries = -1
-	}
 	return SocketConfig{
 		PublicIP:          publicIP,
 		Deadline:          deadline,
+		DisableTimeout:    deadline == 0,
 		HeartbeatInterval: heartbeat,
-		MaxRetries:        maxRetries,
 	}
 }

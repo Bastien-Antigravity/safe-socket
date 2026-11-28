@@ -55,18 +55,21 @@ Verifies that if a peer goes silent, the connection correctly closes after the `
 Verifies that heartbeats are correctly disabled when the deadline is too low to prevent unnecessary CPU overhead.
 - **Thresholds**: 300ms (Network), 150ms (Local), 50ms (SHM).
 
-### 3. Identity Verification
-Ensures that identity is preserved and extractable via `GetIdentity(conn)`.
-- **Key Tests**: `factory_test.go` and `hello_test.go`.
+### 3. Identity Verification & Slow-Loris Handshake Isolation
+Ensures that identity is preserved and extractable via `GetIdentity(conn)` and that stalled/incomplete handshakes fail cleanly within `HandshakeTimeout` without blocking for runtime `IdleTimeout`.
+- **Key Tests**: `TestTCP_Hello`, `TestSHM_HelloIdentityAndReconnect` (`cmd/test/factory_test.go`), `TestHandshakeSlowLorisTimeout` (`cmd/test/probe_resilience_test.go`), and `TestRoleSegregatedClientAndServer` (`src/factory/socket_factory_test.go`).
 
 ### 4. TLS & Encryption
 Verifies that TLS connections are established correctly and identity handshakes are performed over encrypted channels.
-- **Key Test**: `TestTLS_Hello` (in `cmd/test/factory_test.go`).
-- **Logic**: Confirms that certificates are correctly loaded and mutual authentication works.
+- **Key Test**: `TestTLS_Hello` (in `cmd/test/factory_test.go`) and `TestFramedTCPSocket_TLSSocketOptions` (`src/transports/framed_tcp_connection_test.go`).
+- **Logic**: Confirms that certificates are correctly loaded, mutual authentication works, and `TCP_NODELAY`/`SO_KEEPALIVE`/4MB buffers are applied to `*tls.Conn`.
 
-### 5. Infinite Wait (Forever)
-Confirms that setting `idleTimeout = 0` successfully clears all system deadlines.
-- **Key Test**: `TestForeverTimeoutParity` (in `src/transports/forever_test.go`).
+### 5. Infinite Wait (Forever) & Benchmarks (`-benchmem`)
+Confirms that setting `idleTimeout = 0` or `DisableTimeout: true` clears all system deadlines, and tracks hot-path frame allocations via reproducible benchmarks (`Global Rule #11.10`).
+- **Key Tests & Benchmarks**: `TestForeverTimeoutParity` (`src/transports/forever_test.go`), `BenchmarkFramedTCP_SmallFrameZeroAlloc`, `BenchmarkFramedTCP_LargeFrameThroughput`, and `BenchmarkSHM_Throughput` (`src/transports/benchmark_test.go`).
+```bash
+go test -bench=. -benchmem ./src/transports/...
+```
 
 ### 6. Zombie Connection Detection
 Simulates a peer that is connected but completely silent.

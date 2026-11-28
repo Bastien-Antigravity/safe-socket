@@ -31,6 +31,8 @@ go get github.com/Bastien-Antigravity/safe-socket
 | `"shm-hello"` | SHM | Hello | File Path | SHM + Identity Handshake. |
 | `"tls"` | TLS | None | `IP:Port` | Raw TLS stream (Encrypted TCP). |
 | `"tls-hello"` | TLS | Hello | `IP:Port` | TLS + Identity Handshake. |
+| `"auto"` | TCP or TLS | None | `IP:Port` | Local TCP vs. Remote TLS via `MachineDetector`. |
+| `"auto-hello"` | TCP or TLS | Hello | `IP:Port` | Auto-resolved TCP/TLS + Identity Handshake. |
 
 ## TLS Configuration
 
@@ -51,15 +53,18 @@ The core Go engine is exposed via a CGO bridge, providing high-level bindings fo
 - **[C++](./safesock/cpp)**: Modern header-only wrapper.
 - **[VBA](./safesock/vba)**: High-performance access for MS Office.
 
-## High-Responsiveness Defaults
+## Unified Hybrid Timeout Matrix (`ResolveHybridTimeouts`)
 
-To ensure system health, the library defaults to aggressive timeouts:
+`Create`, `CreateClient`, `CreateServer`, and `CreateHybrid` share the canonical `ResolveHybridTimeouts` matrix unless overridden via explicit `SocketConfig`:
 
-| Condition | Handshake Timeout | Data Deadline (Idle) | Heartbeat Interval |
+| Condition / Role | Handshake Timeout | Data Deadline (Idle) | Heartbeat Interval |
 | :--- | :--- | :--- | :--- |
-| **Network** | 500ms | 500ms | 200ms |
-| **Local** | 200ms | 200ms | 80ms |
-| **SHM** | 100ms | 100ms | 40ms |
+| **Local TCP/TLS (Client)** | 200ms | 60s | 24s (`60s / 2.5`) |
+| **Local TCP/TLS (Server)** | 200ms | 10m | 0 (Passive) |
+| **Docker TCP/TLS (Client)** | 500ms | 30s | 12s (`30s / 2.5`) |
+| **Docker TCP/TLS (Server)** | 500ms | 3m | 0 (Passive) |
+| **UDP (Client / Server)** | 200ms–500ms | 5s | Disabled |
+| **SHM (Client / Server)** | 100ms | 0 (`DisableTimeout: true`) | Disabled |
 
 ## Project Structure
 

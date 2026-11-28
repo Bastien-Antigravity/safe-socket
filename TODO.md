@@ -14,7 +14,8 @@ tags:
 
 - [X] **OOM Protection**: Implement `MaxPayloadSize` check in `ReadMessage` to prevent memory exhaustion from oversized frames (FEAT-004).
 - [X] **Synchronous Shutdown**: Implement a wait-state in `Close()` to ensure all background goroutines and buffers are flushed before returning (FEAT-003).
-- [X] **Autonomous Reconnection**: Implement a retry loop with jittered exponential backoff in `SocketClient.Open` (FEAT-005).
+- [X] **Fail-Fast Client Dial Boundary**: Removed autonomous backoff loop from `SocketClient.Open`; resilience and `AppConfig` live-sync delegated to `microservice-toolbox/conn_manager` (FEAT-007).
+- [X] **Two-Phase Handshake Isolation & Hot-Path Optimization**: Isolated pre-handshake `HandshakeTimeout` from runtime `IdleTimeout` in `SocketServer.Accept()`, added zero-alloc stack framing + `writev` scatter-gather I/O + reproducible `-benchmem` benchmarks (ADR-003).
 - [X] **Heartbeat Audit**: Audit internal protocol timings to ensure strict compliance with the **2.5x Heartbeat Safety Ratio** (Ref: 08-Networking-Protocols).
 
 ## 🏗️ Architecture & Refactoring

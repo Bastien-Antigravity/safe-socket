@@ -3,33 +3,45 @@ package transports
 // =============================================================================
 // ESSENTIAL PROCESS:
 // Implements UDP datagram transport connection handling for safe-socket,
-// supporting both connected client sockets and server transient datagram routing.
+// supporting both connected client sockets and demultiplexed server session sockets.
 //
 // DATA FLOW:
-// 1. Input: Datagram bytes or transient remote addresses.
-// 2. Logic: Performs ReadFromUDP / WriteToUDP or connected socket read/write operations.
+// 1. Input: Datagram bytes or demultiplexed packets from UdpListener.
+// 2. Logic: Performs ReadFromUDP / WriteToUDP or channel-backed session reads
+//    with independent per-session idle deadlines.
 // 3. Output: TransportConnection interface for UDP datagram streams.
 //
 // KEY PARAMETERS:
-// - UdpSocket: Datagram connection struct wrapping *net.UDPConn.
+// - UdpSocket: Datagram connection struct wrapping *net.UDPConn or a server session channel.
 // =============================================================================
 
 import (
+	"errors"
 	"net"
+	"os"
+	"sync"
+	"sync/atomic"
 	"time"
 )
 
+const udpMaxDatagramSize = 65535
+
 // UdpSocket implements interfaces.TransportConnection over UDP.
-// Note: UDP is unreliable and unordered.
-// UdpSocket implements interfaces.TransportConnection over UDP.
-// Note: UDP is unreliable and unordered.
+// Note: UDP is unreliable and unordered unless wrapped with ReliableConnection.
 type UdpSocket struct {
 	Conn        *net.UDPConn
 	idleTimeout time.Duration
 
-	// Server-Side: "Transient" socket fields
+	// Server-Side: Demultiplexed session fields
 	TransientRemoteAddr *net.UDPAddr // If set, Write() uses WriteToUDP
-	RecvBuf             []byte       // If set, Read() returns this buffer first (one-shot)
+	RecvBuf             []byte       // Legacy one-shot pre-read buffer
+	recvChan            chan []byte  // Demultiplexed packet queue for server sessions
+	sessionClosed       chan struct{}
+	closeOnce           sync.Once
+	onClose             func()
+	readDeadlineNs      atomic.Int64
+	writeDeadlineNs     atomic.Int64
+	mu                  sync.Mutex
 }
 
 // -----------------------------------------------------------------------------
@@ -46,36 +58,105 @@ func NewUdpSocket(conn *net.UDPConn, timeout time.Duration) *UdpSocket {
 	return s
 }
 
-// NewTransientUdpSocket creates a socket representing a single packet from a sender.
-func NewTransientUdpSocket(conn *net.UDPConn, addr *net.UDPAddr, data []byte, timeout time.Duration) *UdpSocket {
+// NewTransientUdpSocket creates a session socket representing a remote UDP peer,
+// fed by the listener's demultiplexer without mutating the listener's own read deadline.
+func NewTransientUdpSocket(conn *net.UDPConn, addr *net.UDPAddr, data []byte, timeout time.Duration, onClose ...func()) *UdpSocket {
 	s := &UdpSocket{
 		Conn:                conn,
 		TransientRemoteAddr: addr,
-		RecvBuf:             data,
 		idleTimeout:         timeout,
+		recvChan:            make(chan []byte, 64),
+		sessionClosed:       make(chan struct{}),
 	}
-	if conn != nil {
-		s.refreshReadDeadline()
-		s.refreshWriteDeadline()
+	if len(onClose) > 0 {
+		s.onClose = onClose[0]
+	}
+	if len(data) > 0 {
+		s.recvChan <- data
+	} else if data != nil {
+		s.recvChan <- data
+	}
+	if timeout > 0 {
+		s.readDeadlineNs.Store(time.Now().Add(timeout).UnixNano())
+		s.writeDeadlineNs.Store(time.Now().Add(timeout).UnixNano())
 	}
 	return s
 }
 
+func (s *UdpSocket) enqueuePacket(pkt []byte) {
+	if s.recvChan == nil {
+		return
+	}
+	select {
+	case <-s.sessionClosed:
+		return
+	default:
+	}
+	s.refreshReadDeadline()
+	select {
+	case s.recvChan <- pkt:
+	default:
+		// Drop oldest buffered packet on burst saturation to keep newest telemetry fresh
+		select {
+		case <-s.recvChan:
+		default:
+		}
+		select {
+		case s.recvChan <- pkt:
+		default:
+		}
+	}
+}
+
 func (s *UdpSocket) refreshReadDeadline() {
-	if s.idleTimeout > 0 && s.Conn != nil {
-		_ = s.Conn.SetReadDeadline(time.Now().Add(s.idleTimeout))
+	s.mu.Lock()
+	idle := s.idleTimeout
+	s.mu.Unlock()
+
+	if s.recvChan != nil {
+		if idle > 0 {
+			s.readDeadlineNs.Store(time.Now().Add(idle).UnixNano())
+		}
+		return
+	}
+	if idle > 0 && s.Conn != nil {
+		_ = s.Conn.SetReadDeadline(time.Now().Add(idle))
 	}
 }
 
 func (s *UdpSocket) refreshWriteDeadline() {
-	if s.idleTimeout > 0 && s.Conn != nil {
-		_ = s.Conn.SetWriteDeadline(time.Now().Add(s.idleTimeout))
+	s.mu.Lock()
+	idle := s.idleTimeout
+	s.mu.Unlock()
+
+	if s.recvChan != nil {
+		if idle > 0 {
+			s.writeDeadlineNs.Store(time.Now().Add(idle).UnixNano())
+		}
+		return
+	}
+	if idle > 0 && s.Conn != nil {
+		_ = s.Conn.SetWriteDeadline(time.Now().Add(idle))
 	}
 }
 
 // SetIdleTimeout updates the internal idle timeout and refreshes current deadlines.
 func (s *UdpSocket) SetIdleTimeout(d time.Duration) error {
+	s.mu.Lock()
 	s.idleTimeout = d
+	s.mu.Unlock()
+
+	if s.recvChan != nil {
+		if d == 0 {
+			s.readDeadlineNs.Store(0)
+			s.writeDeadlineNs.Store(0)
+		} else {
+			s.refreshReadDeadline()
+			s.refreshWriteDeadline()
+		}
+		return nil
+	}
+
 	if s.Conn == nil {
 		return nil
 	}
@@ -102,6 +183,11 @@ func (s *UdpSocket) Write(p []byte) (n int, err error) {
 
 	// If this is a transient server socket, reply to the specific remote address
 	if s.TransientRemoteAddr != nil {
+		select {
+		case <-s.sessionClosed:
+			return 0, net.ErrClosed
+		default:
+		}
 		return s.Conn.WriteToUDP(p, s.TransientRemoteAddr)
 	}
 
@@ -111,11 +197,66 @@ func (s *UdpSocket) Write(p []byte) (n int, err error) {
 
 // -----------------------------------------------------------------------------
 
+func (s *UdpSocket) readSessionPacket() ([]byte, error) {
+	s.mu.Lock()
+	if s.RecvBuf != nil {
+		buf := s.RecvBuf
+		s.RecvBuf = nil
+		s.mu.Unlock()
+		return buf, nil
+	}
+	s.mu.Unlock()
+
+	// Drain any already-buffered packet before evaluating read deadline expiration.
+	select {
+	case pkt := <-s.recvChan:
+		s.refreshReadDeadline()
+		return pkt, nil
+	default:
+	}
+
+	rdNs := s.readDeadlineNs.Load()
+	if rdNs == 0 {
+		select {
+		case pkt := <-s.recvChan:
+			s.refreshReadDeadline()
+			return pkt, nil
+		case <-s.sessionClosed:
+			return nil, net.ErrClosed
+		}
+	}
+
+	remaining := time.Until(time.Unix(0, rdNs))
+	if remaining <= 0 {
+		return nil, os.ErrDeadlineExceeded
+	}
+	timer := time.NewTimer(remaining)
+	defer timer.Stop()
+
+	select {
+	case pkt := <-s.recvChan:
+		s.refreshReadDeadline()
+		return pkt, nil
+	case <-s.sessionClosed:
+		return nil, net.ErrClosed
+	case <-timer.C:
+		return nil, os.ErrDeadlineExceeded
+	}
+}
+
 // Read reads a datagram.
-// Note: If 'p' is smaller than the incoming datagram, the excess data is discarded by the OS.
+// Note: If 'p' is smaller than the incoming datagram, the excess data is discarded.
 func (s *UdpSocket) Read(p []byte) (n int, err error) {
+	if s.recvChan != nil {
+		pkt, err := s.readSessionPacket()
+		if err != nil {
+			return 0, err
+		}
+		n = copy(p, pkt)
+		return n, nil
+	}
+
 	s.refreshReadDeadline()
-	// If we have a pre-read buffer (Transient Server Socket), return it immediately
 	if s.RecvBuf != nil {
 		n := copy(p, s.RecvBuf)
 		s.RecvBuf = nil // consumed
@@ -130,11 +271,13 @@ func (s *UdpSocket) Read(p []byte) (n int, err error) {
 
 // -----------------------------------------------------------------------------
 
-// ReadMessage for UDP allocates a buffer large enough for a standard UDP packet (64KB max),
-// reads, and returns the sliced data.
+// ReadMessage for UDP reads a full datagram (up to 64KB) and returns it.
 func (s *UdpSocket) ReadMessage() ([]byte, error) {
+	if s.recvChan != nil {
+		return s.readSessionPacket()
+	}
+
 	s.refreshReadDeadline()
-	// If we have a pre-read buffer (Transient Server Socket), return it immediately
 	if s.RecvBuf != nil {
 		result := make([]byte, len(s.RecvBuf))
 		copy(result, s.RecvBuf)
@@ -146,23 +289,15 @@ func (s *UdpSocket) ReadMessage() ([]byte, error) {
 		return nil, net.ErrClosed
 	}
 
-	// Max UDP packet size is technically ~65535.
-	// We allocate a temp buffer.
-	tmp := make([]byte, 65535)
-
+	tmp := make([]byte, udpMaxDatagramSize)
 	n, remoteAddr, err := s.Conn.ReadFromUDP(tmp)
 	if err != nil {
 		return nil, err
 	}
+	if remoteAddr != nil {
+		s.TransientRemoteAddr = remoteAddr
+	}
 
-	// For Transient logic (server side reply), we store the remote addr
-	// Note: Thread safety issue here if sharing socket, but UDP socket per-packet model usually implies single thread or copy.
-	// But actually, UdpSocket struct is updated with TransientRemoteAddr.
-	s.TransientRemoteAddr = remoteAddr
-
-	// Return a copy of exactly n bytes
-	// Or return slice? Slice keeps underlying array alive. Copy is safer for memory if array is huge.
-	// Given 64KB is small, we can copy to fit.
 	result := make([]byte, n)
 	copy(result, tmp[:n])
 	return result, nil
@@ -171,14 +306,24 @@ func (s *UdpSocket) ReadMessage() ([]byte, error) {
 // -----------------------------------------------------------------------------
 
 func (s *UdpSocket) Close() error {
-	if s.Conn == nil {
-		return nil
-	}
 	// Server-side transient sockets share the listener's *net.UDPConn;
 	// closing a transient socket must not close the underlying listener.
 	if s.TransientRemoteAddr != nil {
-		s.RecvBuf = nil
-		s.Conn = nil
+		s.closeOnce.Do(func() {
+			if s.sessionClosed != nil {
+				close(s.sessionClosed)
+			}
+			if s.onClose != nil {
+				s.onClose()
+			}
+			s.mu.Lock()
+			s.RecvBuf = nil
+			s.Conn = nil
+			s.mu.Unlock()
+		})
+		return nil
+	}
+	if s.Conn == nil {
 		return nil
 	}
 	return s.Conn.Close()
@@ -188,6 +333,15 @@ func (s *UdpSocket) Close() error {
 
 // SetDeadline sets the read and write deadlines.
 func (s *UdpSocket) SetDeadline(t time.Time) error {
+	if s.recvChan != nil {
+		var ns int64
+		if !t.IsZero() {
+			ns = t.UnixNano()
+		}
+		s.readDeadlineNs.Store(ns)
+		s.writeDeadlineNs.Store(ns)
+		return nil
+	}
 	if s.Conn == nil {
 		return nil
 	}
@@ -198,6 +352,14 @@ func (s *UdpSocket) SetDeadline(t time.Time) error {
 
 // SetReadDeadline sets the read deadline.
 func (s *UdpSocket) SetReadDeadline(t time.Time) error {
+	if s.recvChan != nil {
+		var ns int64
+		if !t.IsZero() {
+			ns = t.UnixNano()
+		}
+		s.readDeadlineNs.Store(ns)
+		return nil
+	}
 	if s.Conn == nil {
 		return nil
 	}
@@ -208,6 +370,14 @@ func (s *UdpSocket) SetReadDeadline(t time.Time) error {
 
 // SetWriteDeadline sets the write deadline.
 func (s *UdpSocket) SetWriteDeadline(t time.Time) error {
+	if s.recvChan != nil {
+		var ns int64
+		if !t.IsZero() {
+			ns = t.UnixNano()
+		}
+		s.writeDeadlineNs.Store(ns)
+		return nil
+	}
 	if s.Conn == nil {
 		return nil
 	}
@@ -236,3 +406,5 @@ func (s *UdpSocket) RemoteAddr() net.Addr {
 	}
 	return s.Conn.RemoteAddr()
 }
+
+var _ error = errors.New("")

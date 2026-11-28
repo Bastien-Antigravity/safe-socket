@@ -2,16 +2,18 @@ package interfaces
 
 // =============================================================================
 // ESSENTIAL PROCESS:
-// Defines the core Socket interface contract for high-level client and server operations,
-// unifying connection establishment, data transmission, and idle timeout management.
+// Defines role-segregated ClientSocket and ServerSocket interfaces alongside the
+// legacy unified Socket contract for high-level safe-socket operations.
 //
 // DATA FLOW:
 // 1. Input: Higher-level consumer requests (Open, Listen, Accept, Send, Receive).
-// 2. Logic: Enforces standard contract implemented by SocketClient and SocketServer.
+// 2. Logic: Enforces clean client vs server contracts implemented by SocketClient and SocketServer.
 // 3. Output: Operates socket state and delivers received payloads.
 //
 // KEY PARAMETERS:
-// - Socket: Unified interface exported across the Bastien-Antigravity ecosystem.
+// - ClientSocket: Client-side dial, I/O, and deadline contract.
+// - ServerSocket: Server-side listener, accept, and shutdown contract.
+// - Socket: Unified backward-compatible interface combining both roles.
 // =============================================================================
 
 import (
@@ -30,9 +32,41 @@ const (
 
 // -----------------------------------------------------------------------------
 
+// ClientSocket defines the role-segregated contract for client-side safe-socket connections.
+type ClientSocket interface {
+	Close() error
+	SetLogger(logger Logger)
+
+	Open() error
+	Send(data []byte) error
+	Write(data []byte) (int, error)
+	Read(p []byte) (int, error)
+	Receive() ([]byte, error)
+	ReadMessage() ([]byte, error)
+
+	SetDeadline(t time.Time) error
+	SetReadDeadline(t time.Time) error
+	SetWriteDeadline(t time.Time) error
+	SetIdleTimeout(d time.Duration) error
+}
+
+// -----------------------------------------------------------------------------
+
+// ServerSocket defines the role-segregated contract for server-side safe-socket listeners.
+type ServerSocket interface {
+	Close() error
+	SetLogger(logger Logger)
+
+	Listen() error
+	Accept() (TransportConnection, error)
+	GetAddr() (string, error)
+	SetIdleTimeout(d time.Duration) error
+}
+
+// -----------------------------------------------------------------------------
+
 // Socket defines the unified high-level interface for a safe-socket connection.
-// It encompasses both Client and Server operations. Implementations should return
-// errors for unsupported operations based on their role.
+// Retained for backward compatibility; prefer ClientSocket or ServerSocket for new code.
 type Socket interface {
 	// Common
 	Close() error
@@ -61,5 +95,4 @@ type Socket interface {
 	// Server Methods
 	Listen() error
 	Accept() (TransportConnection, error)
-	// Addr() net.Addr // Optional: might be useful to expose listener address
 }

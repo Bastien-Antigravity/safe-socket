@@ -31,7 +31,7 @@ func TestStress_Concurrency(t *testing.T) {
 
 	for _, tr := range transports {
 		t.Run(tr, func(t *testing.T) {
-			addr := "127.0.0.1:9200"
+			addr := ""
 			numClients := 100
 			messagesPerClient := 10
 
@@ -40,6 +40,8 @@ func TestStress_Concurrency(t *testing.T) {
 				numClients = 1           // SHM is strictly 1-to-1 in current implementation
 				messagesPerClient = 1000 // Stress by volume instead of concurrency
 				defer func() { _ = os.Remove(addr) }()
+			} else {
+				addr = freeTCPAddr(t)
 			}
 
 			// 1. Start Server
@@ -130,7 +132,7 @@ func TestStress_Concurrency(t *testing.T) {
 
 // TestStress_RapidReconnect verifies no leaks or races during rapid open/close cycles.
 func TestStress_RapidReconnect(t *testing.T) {
-	addr := "127.0.0.1:9201"
+	addr := freeTCPAddr(t)
 	server, _ := factory.Create("tcp", addr, "", "server", true)
 	defer func() { _ = server.Close() }()
 

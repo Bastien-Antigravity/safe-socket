@@ -2,26 +2,26 @@ package facade
 
 // =============================================================================
 // ESSENTIAL PROCESS:
-// Implements the interfaces.Socket interface for client-side transport management,
-// handling exponential-backoff dial reconnection, TLS/TCP/UDP/SHM transport setup,
-// protocol handshakes, and thread-safe data sending and receiving.
+// Implements the interfaces.ClientSocket and interfaces.Socket contracts for
+// client-side transport management, TLS/TCP/UDP/SHM setup, protocol handshakes,
+// and thread-safe data sending and receiving.
 //
 // DATA FLOW:
 // 1. Input: Target endpoint address, SocketProfile, and SocketConfig.
-// 2. Logic: Dials transport with jittered backoff, runs protocol handshake,
-//    decorates with heartbeat and reliability wrappers, and manages I/O.
+// 2. Logic: Dials transport once, runs protocol handshake, decorates with heartbeat
+//    and reliability wrappers, and manages I/O. (Retries belong in conn_manager.)
 // 3. Output: Transmits and receives framed payloads across established streams.
 //
 // KEY PARAMETERS:
 // - Profile: Socket profile configuring transport type and handshake protocol.
-// - Config: Client configuration specifying timeouts, retries, and certificates.
+// - Config: Client configuration specifying timeouts, deadlines, and certificates.
 // =============================================================================
 
 import (
 	"errors"
 	"fmt"
-	"math/rand"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Bastien-Antigravity/safe-socket/src/interfaces"
@@ -29,10 +29,9 @@ import (
 	"github.com/Bastien-Antigravity/safe-socket/src/protocols"
 	"github.com/Bastien-Antigravity/safe-socket/src/transports"
 	"github.com/Bastien-Antigravity/safe-socket/src/utils"
-	"sync"
 )
 
-// SocketClient implements the interfaces.Socket interface for Client-side operations.
+// SocketClient implements interfaces.ClientSocket and interfaces.Socket for Client-side operations.
 // It handles establishing connections (Open), sending/receiving data, and protocol handshakes.
 // Server-side methods (Listen, Accept) will return errors.
 type SocketClient struct {
@@ -55,8 +54,8 @@ func NewSocketClient(p interfaces.SocketProfile, c models.SocketConfig) *SocketC
 
 // -----------------------------------------------------------------------------
 
-// Open establishes the connection using the configured transport and protocol.
-// If MaxRetries > 0, it will attempt reconnection on failure.
+// Open establishes a single connection attempt using the configured transport and protocol.
+// Backoff and reconnection orchestration are delegated to higher layers (e.g. conn_manager).
 func (c *SocketClient) Open() error {
 	c.mu.Lock()
 	if c.transport != nil {
@@ -65,38 +64,7 @@ func (c *SocketClient) Open() error {
 	}
 	c.mu.Unlock()
 
-	retries := 0
-	currentInterval := c.Config.RetryInterval
-	if currentInterval <= 0 {
-		currentInterval = 500 * time.Millisecond
-	}
-
-	for {
-		err := c.attemptOpen()
-		if err == nil {
-			return nil
-		}
-
-		// Check if we should retry
-		if c.Config.MaxRetries == 0 || (c.Config.MaxRetries > 0 && retries >= c.Config.MaxRetries) {
-			return fmt.Errorf("failed to open socket after %d attempts: %w", retries+1, err)
-		}
-
-		retries++
-		c.Logger.Warning(fmt.Sprintf("Socket open failed: %v. Retrying in %v (Attempt %d/%d)...", err, currentInterval, retries, c.Config.MaxRetries))
-
-		time.Sleep(currentInterval)
-
-		// Exponential Backoff with Jitter (FEAT-005)
-		// Max interval capped at 30s
-		nextInterval := float64(currentInterval) * 1.5
-		if nextInterval > float64(30*time.Second) {
-			nextInterval = float64(30 * time.Second)
-		}
-		// Apply 20% jitter
-		jitter := (rand.Float64() * 0.4) - 0.2 // -20% to +20%
-		currentInterval = time.Duration(nextInterval * (1 + jitter))
-	}
+	return c.attemptOpen()
 }
 
 func (c *SocketClient) attemptOpen() error {
@@ -111,21 +79,22 @@ func (c *SocketClient) attemptOpen() error {
 	}
 
 	// Idle Timeout (Read/Write)
-	// If Config.Deadline is set (even to 0), we use it as the Idle Timeout.
 	idleTimeout := connectTimeout
-	if c.Config.Deadline >= 0 {
+	if c.Config.DisableTimeout || c.Config.Deadline < 0 {
+		idleTimeout = 0
+	} else if c.Config.Deadline > 0 {
 		idleTimeout = c.Config.Deadline
 	}
 
 	switch c.Profile.GetTransport() {
 	case interfaces.TransportTLS:
-		conn, err = transports.ConnectTLS(c.Profile.GetAddress(), idleTimeout, c.Config.CertFile, c.Config.KeyFile, c.Config.CAFile, c.Config.ServerName, c.Config.InsecureSkipVerify)
+		conn, err = transports.ConnectTLS(c.Profile.GetAddress(), connectTimeout, c.Config.CertFile, c.Config.KeyFile, c.Config.CAFile, c.Config.ServerName, c.Config.InsecureSkipVerify)
 	case interfaces.TransportFramedTCP:
-		conn, err = transports.Connect(c.Profile.GetAddress(), idleTimeout)
+		conn, err = transports.Connect(c.Profile.GetAddress(), connectTimeout)
 	case interfaces.TransportShm:
-		conn, err = transports.ConnectShm(c.Profile.GetName(), idleTimeout)
+		conn, err = transports.ConnectShm(c.Profile.GetAddress(), connectTimeout)
 	case interfaces.TransportUDP:
-		conn, err = transports.ConnectUDP(c.Profile.GetAddress(), idleTimeout)
+		conn, err = transports.ConnectUDP(c.Profile.GetAddress(), connectTimeout)
 	default:
 		return errors.New("unsupported transport type")
 	}
@@ -133,6 +102,9 @@ func (c *SocketClient) attemptOpen() error {
 	if err != nil {
 		return err
 	}
+
+	// Apply runtime idle timeout after dial (preserving connectTimeout for the dial itself)
+	_ = conn.SetIdleTimeout(idleTimeout)
 
 	// 1b. Apply Reliability Layer if requested (UDP only)
 	if c.Config.Reliable && c.Profile.GetTransport() == interfaces.TransportUDP {
@@ -153,7 +125,9 @@ func (c *SocketClient) attemptOpen() error {
 
 	// 3. Heartbeat Optimization & Safety Ratio
 	heartbeatInterval := c.Config.HeartbeatInterval
-	if heartbeatInterval == 0 {
+	if heartbeatInterval < 0 || idleTimeout == 0 {
+		heartbeatInterval = 0
+	} else if heartbeatInterval == 0 {
 		heartbeatInterval = time.Duration(float64(idleTimeout) / 2.5)
 
 		// Threshold Check (Network: 300ms, Local: 150ms, SHM: 50ms)
@@ -245,6 +219,11 @@ func (c *SocketClient) Receive() ([]byte, error) {
 	return tr.ReadMessage()
 }
 
+// ReadMessage aliases Receive to satisfy interfaces.ClientSocket and mirror TransportConnection.
+func (c *SocketClient) ReadMessage() ([]byte, error) {
+	return c.Receive()
+}
+
 // Read reads from the transport into the provided buffer (io.Reader compliance).
 func (c *SocketClient) Read(p []byte) (int, error) {
 	c.mu.RLock()
@@ -319,6 +298,7 @@ func (c *SocketClient) SetWriteDeadline(t time.Time) error {
 func (c *SocketClient) SetIdleTimeout(d time.Duration) error {
 	c.mu.Lock()
 	c.Config.Deadline = d
+	c.Config.DisableTimeout = d <= 0
 	tr := c.transport
 	c.mu.Unlock()
 

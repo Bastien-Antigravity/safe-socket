@@ -93,23 +93,14 @@ func (p *HelloProtocol) Initiate(conn interfaces.TransportConnection, profile in
 
 // WaitInitiation waits for a HelloMsg from the client and unmarshals it.
 func (p *HelloProtocol) WaitInitiation(conn interfaces.TransportConnection) (*schemas.HelloMsg, error) {
-	// 1. Prepare Buffer
-	// Use a larger buffer (4KB) to avoid io.ErrShortBuffer from framed transport
-	// if the message contains long strings (host, address, etc).
-	buf := make([]byte, 4096)
-
-	// 2. Read from connection
-	n, err := conn.Read(buf)
+	// 1. Read exact handshake frame from connection without fixed buffer truncation
+	data, err := conn.ReadMessage()
 	if err != nil {
 		return nil, err
 	}
 
-	// 3. Unmarshal
-	// Cap'n Proto requires the full buffer or a stream.
-	// With FramedTCP, we have the full message in buf[:n].
-	// However, we need to handle proper unmarshalling from bytes.
-
-	msg, err := capnp.Unmarshal(buf[:n])
+	// 2. Unmarshal Cap'n Proto HelloMsg
+	msg, err := capnp.Unmarshal(data)
 	if err != nil {
 		return nil, err
 	}

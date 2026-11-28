@@ -11,7 +11,7 @@ package models
 // 3. Output: Configured timeout deadlines, retry policies, and advertised identities.
 //
 // KEY PARAMETERS:
-// - SocketConfig: Struct holding PublicIP, ServiceAddress, Deadline, HeartbeatInterval, HandshakeTimeout, MaxRetries.
+// - SocketConfig: Struct holding PublicIP, ServiceAddress, Deadline, DisableTimeout, HeartbeatInterval, HandshakeTimeout.
 // =============================================================================
 
 import (
@@ -29,24 +29,22 @@ type SocketConfig struct {
 	// When provided, it is transmitted in the handshake FromAddress to enable dynamic service discovery.
 	ServiceAddress string
 
-	// Deadline is the default timeout for read/write operations on accepted connections.
-	// If set to 0, no deadline is applied by default (server stays open/blocking).
-	// This only applies to the *server* when accepting a new connection.
+	// Deadline is the default idle timeout for read/write operations.
+	// If set to 0 and DisableTimeout is false, CreateWithConfig applies hybrid transport/mode defaults.
+	// Set DisableTimeout: true (or Deadline < 0) to wait forever with zero idle deadlines.
 	Deadline time.Duration
 
-	// HeartbeatInterval is the time between sending empty heartbeat frames (ping).
-	// If 0, a default (e.g. 10s) may be used depending on the facade.
+	// DisableTimeout explicitly disables idle read/write deadlines and automatic heartbeats
+	// (equivalent to infinite wait / forever mode with Deadline = 0).
+	DisableTimeout bool
+
+	// HeartbeatInterval is the time between sending 0-length heartbeat frames.
+	// For clients, 0 auto-calculates Deadline / 2.5; negative (< 0) disables heartbeats.
+	// For servers, outbound heartbeats are disabled unless > 0 is explicitly provided.
 	HeartbeatInterval time.Duration
 
-	// HandshakeTimeout is the time allowed for the initial protocol handshake.
+	// HandshakeTimeout is the time allowed for the initial connection/protocol handshake.
 	HandshakeTimeout time.Duration
-
-	// MaxRetries is the number of times to attempt reconnection if Open() fails.
-	// Set to -1 for infinite retries.
-	MaxRetries int
-
-	// RetryInterval is the time between reconnection attempts.
-	RetryInterval time.Duration
 
 	// Reliable enables the reliability layer for unreliable transports (UDP).
 	// When enabled, packets will include sequence numbers and expect ACKs.

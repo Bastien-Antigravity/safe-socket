@@ -44,7 +44,12 @@ func TestResolveHybridTimeouts_LocalVsDockerTCP(t *testing.T) {
 	}
 
 	cfg := NewHybridSocketConfig("tcp-hello", "client", "127.0.0.1", true)
-	if cfg.MaxRetries != -1 || cfg.Deadline != DockerTCPClientIdleTimeout || cfg.HeartbeatInterval != DockerTCPClientHeartbeat {
+	if cfg.DisableTimeout || cfg.Deadline != DockerTCPClientIdleTimeout || cfg.HeartbeatInterval != DockerTCPClientHeartbeat {
 		t.Fatalf("Unexpected NewHybridSocketConfig: %+v", cfg)
+	}
+
+	shmCfg := NewHybridSocketConfig("shm-hello", "client", "", false)
+	if !shmCfg.DisableTimeout || shmCfg.Deadline != 0 || shmCfg.HeartbeatInterval != 0 {
+		t.Fatalf("Expected SHM NewHybridSocketConfig to have DisableTimeout=true and (0, 0), got %+v", shmCfg)
 	}
 }

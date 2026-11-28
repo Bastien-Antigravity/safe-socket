@@ -7,7 +7,7 @@ package profiles
 //
 // DATA FLOW:
 // 1. Input: Endpoint host:port strings, timeouts, and protocol specifications.
-// 2. Logic: Implements SocketProfile to declare TCP transport characteristics for clients.
+// 2. Logic: Embeds BaseProfile to declare TCP transport characteristics for clients.
 // 3. Output: TcpClientProfile and TcpHelloClientProfile configurations.
 //
 // KEY PARAMETERS:
@@ -24,38 +24,20 @@ import "github.com/Bastien-Antigravity/safe-socket/src/interfaces"
 // TcpClientProfile implements the SocketProfile interface for a raw TCP connection
 // without any handshake protocol.
 type TcpClientProfile struct {
-	Name    string
-	Address string
-	Timeout int
+	BaseProfile
 }
 
 // NewTcpClientProfile creates a new instance of a TCP profile without a protocol.
 func NewTcpClientProfile(name, address string, timeout int) *TcpClientProfile {
 	return &TcpClientProfile{
-		Name:    name,
-		Address: address,
-		Timeout: timeout,
+		BaseProfile: BaseProfile{
+			Name:           name,
+			Address:        address,
+			Transport:      interfaces.TransportFramedTCP,
+			Protocol:       interfaces.ProtocolNone,
+			ConnectTimeout: timeout,
+		},
 	}
-}
-
-func (p *TcpClientProfile) GetName() string {
-	return p.Name
-}
-
-func (p *TcpClientProfile) GetAddress() string {
-	return p.Address
-}
-
-func (p *TcpClientProfile) GetTransport() interfaces.TransportType {
-	return interfaces.TransportFramedTCP
-}
-
-func (p *TcpClientProfile) GetProtocol() interfaces.ProtocolType {
-	return interfaces.ProtocolNone
-}
-
-func (p *TcpClientProfile) GetConnectTimeout() int {
-	return p.Timeout
 }
 
 // -----------------------------------------------------------------------------
@@ -65,38 +47,18 @@ func (p *TcpClientProfile) GetConnectTimeout() int {
 // TcpHelloClientProfile implements the SocketProfile interface for a TCP connection
 // that performs a handshake protocol upon connection.
 type TcpHelloClientProfile struct {
-	Name           string
-	Address        string
-	ConnectTimeout int
-	Protocol       interfaces.ProtocolType
+	BaseProfile
 }
 
 // NewTcpHelloClientProfile creates a new instance of a TCP profile with the Hello protocol.
 func NewTcpHelloClientProfile(name, address string, timeout int) *TcpHelloClientProfile {
 	return &TcpHelloClientProfile{
-		Name:           name,
-		Address:        address,
-		ConnectTimeout: timeout,
-		Protocol:       interfaces.ProtocolHello,
+		BaseProfile: BaseProfile{
+			Name:           name,
+			Address:        address,
+			Transport:      interfaces.TransportFramedTCP,
+			Protocol:       interfaces.ProtocolHello,
+			ConnectTimeout: timeout,
+		},
 	}
-}
-
-func (p *TcpHelloClientProfile) GetName() string {
-	return p.Name
-}
-
-func (p *TcpHelloClientProfile) GetAddress() string {
-	return p.Address
-}
-
-func (p *TcpHelloClientProfile) GetTransport() interfaces.TransportType {
-	return interfaces.TransportFramedTCP
-}
-
-func (p *TcpHelloClientProfile) GetProtocol() interfaces.ProtocolType {
-	return p.Protocol
-}
-
-func (p *TcpHelloClientProfile) GetConnectTimeout() int {
-	return p.ConnectTimeout
 }

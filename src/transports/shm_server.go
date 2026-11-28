@@ -76,33 +76,40 @@ func ListenShm(path string, timeout time.Duration) (interfaces.TransportListener
 
 // -----------------------------------------------------------------------------
 
-// Accept waits for a client to attach to the SHM file.
-// Note: Current implementation is 1-to-1 (Point-to-Point).
+// Accept waits for a client to attach to the SHM file and returns a session handle.
+// Closing the returned session handle resets the ring state and allows subsequent clients to connect.
 func (l *ShmListener) Accept() (interfaces.TransportConnection, error) {
-	if !atomic.CompareAndSwapInt32(&l.acceptCount, 0, 1) {
-		// In a real multi-tenant scenario, we would wait for a new file request.
-		// For now, we only support one client per SHM path.
-		return nil, errors.New("SHM listener only supports one concurrent connection")
+	// Wait for client to set ClientStatus to Connected while acquiring the 1-to-1 session slot
+	for {
+		if l.transport.closed.Load() {
+			return nil, errors.New("listener closed")
+		}
+		if atomic.CompareAndSwapInt32(&l.acceptCount, 0, 1) {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 
 	// Wait for client to set ClientStatus to Connected
 	// Using a relatively slow poll here as Accept is not in the hot path.
 	for {
-		if l.transport.closed.Load() {
-			return nil, errors.New("listener closed")
-		}
-		l.transport.mmapMu.RLock()
-		if l.transport.closed.Load() {
-			l.transport.mmapMu.RUnlock()
+		if l.transport.closed.Load() || l.transport.unmapped.Load() {
+			atomic.StoreInt32(&l.acceptCount, 0)
 			return nil, errors.New("listener closed")
 		}
 		status := atomic.LoadUint64(l.transport.ClientStatus)
 		if status == StatusConnected {
 			atomic.StoreUint64(l.transport.ServerStatus, StatusConnected)
-			l.transport.mmapMu.RUnlock()
-			return l.transport, nil
+			session := l.transport.newSessionHandle(l.timeout, func() error {
+				if !l.transport.closed.Load() && !l.transport.unmapped.Load() {
+					atomic.StoreUint64(l.transport.ServerStatus, StatusListening)
+					atomic.CompareAndSwapUint64(l.transport.ClientStatus, StatusConnected, StatusIdle)
+				}
+				atomic.StoreInt32(&l.acceptCount, 0)
+				return nil
+			})
+			return session, nil
 		}
-		l.transport.mmapMu.RUnlock()
 		time.Sleep(10 * time.Millisecond)
 	}
 }

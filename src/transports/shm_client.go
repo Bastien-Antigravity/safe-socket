@@ -56,6 +56,13 @@ func ConnectShm(path string, timeout time.Duration) (interfaces.TransportConnect
 
 	t := NewShmTransport(file, m, "client", timeout)
 
+	// Reset ring offsets before advertising presence so reconnects start with clean rings
+	atomic.StoreUint64(t.ProduceHead, 0)
+	atomic.StoreUint64(t.ProduceTail, 0)
+	atomic.StoreUint64(t.ConsumeHead, 0)
+	atomic.StoreUint64(t.ConsumeTail, 0)
+	atomic.StoreUint64(t.MyActivity, uint64(time.Now().UnixNano()))
+
 	// Signal presence to listener
 	atomic.StoreUint64(t.ClientStatus, StatusConnected)
 

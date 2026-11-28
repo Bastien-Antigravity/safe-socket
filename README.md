@@ -28,35 +28,33 @@ For a detailed breakdown of this library's features, polyglot SDKs, and BDD beha
 
 ### Zero-Boilerplate Creation
 
-Use `safesocket.Create` to instantiate and connect in one line.
+Use `safesocket.CreateClient`, `safesocket.CreateServer`, or `safesocket.Create` to instantiate and connect in one line.
 
 ```go
 import (
 	"log"
-    "time"
+	"time"
 
 	"github.com/Bastien-Antigravity/safe-socket"
 )
 
 func main() {
-    // Example: Connect to a server using TCP with Hello Handshake
-    // publicIP: Optional (automatically resolved if empty)
-    // socketType: "client" or "server"
-    socket, err := safesocket.Create("tcp-hello", "127.0.0.1:9000", "", "client", true)
+    // Role-segregated client socket (recommended)
+    client, err := safesocket.CreateClient("tcp-hello:my-service", "127.0.0.1:9000", "", true)
     if err != nil {
         log.Fatal(err)
     }
-    defer socket.Close()
+    defer client.Close()
 
 	// Send Data
-    socket.Send([]byte("Hello Server!"))
+    client.Send([]byte("Hello Server!"))
 
     // Receive Data (Dynamic Buffer)
     // Receive() automatically allocates the correct size.
     // Set a Deadline for the read operation
-    socket.SetReadDeadline(time.Now().Add(2 * time.Second))
+    client.SetReadDeadline(time.Now().Add(2 * time.Second))
     
-    msg, err := socket.Receive()
+    msg, err := client.Receive()
     if err != nil {
         // Handle timeout
         log.Printf("Receive failed: %v", err)
@@ -66,17 +64,16 @@ func main() {
 
     // Alternative: Use Read() for fixed buffers (io.Reader compliant)
     // buf := make([]byte, 1024)
-    // n, _ := socket.Read(buf)
+    // n, _ := client.Read(buf)
 
-    // NEW: Update Idle Timeout at runtime
-    // Use 0 to disable timeouts and wait 'forever'
-    socket.SetIdleTimeout(0)
+    // Update Idle Timeout at runtime (0 disables timeouts and waits 'forever')
+    client.SetIdleTimeout(0)
 }
 ```
 
 ### Advanced Creation
 
-For more control (e.g., setting a default deadline), use `safesocket.CreateWithConfig`:
+For more control (e.g., setting a custom deadline or disabling timeouts upfront), use `safesocket.CreateClientWithConfig`, `safesocket.CreateServerWithConfig`, or `safesocket.CreateWithConfig`:
 
 ```go
 config := safesocket.SocketConfig{
@@ -84,11 +81,11 @@ config := safesocket.SocketConfig{
     Deadline: 5 * time.Minute, // Idle Timeout: Connection stays alive as long as active
 }
 
-// Note: Use Deadline: 0 (or config.SetIdleTimeout(0)) for a completely open (infinite) connection.
-// This is now supported across TCP, TLS, UDP, and Shared Memory transports.
+// Note: Set DisableTimeout: true (or Deadline: -1) for an infinite (forever) connection
+// across TCP, TLS, UDP, and Shared Memory transports.
+// Leaving Deadline: 0 applies transport- and deployment-mode-aware hybrid defaults.
 
-// CreateWithConfig(profile, address, config, type, autoConnect)
-socket, err := safesocket.CreateWithConfig("tcp-hello", "127.0.0.1:9000", config, "server", true)
+server, err := safesocket.CreateServerWithConfig("tcp-hello", "127.0.0.1:9000", config, true)
 if err != nil {
     log.Fatal(err)
 }
@@ -99,14 +96,14 @@ if err != nil {
 | Profile | Transport | Protocol | Address Format | Behavior |
 | :--- | :--- | :--- | :--- | :--- |
 | `"auto-hello"`, `"auto"` | **Auto (TCP / TLS)** | Hello | `IP:Port` | **Intelligent Auto-Encryption**: Evaluates target address using `MachineDetector`. Connects via unencrypted Framed TCP if local machine; automatically enables TLS if destination is on a remote machine. |
-| `"tcp"` | TCP | None | `IP:Port` | Raw TCP stream. |
-| `"tcp-hello"` | TCP | Hello | `IP:Port` | TCP + Identity Handshake. |
-| `"tls"` | TLS | None | `IP:Port` | Raw TLS stream. |
-| `"tls-hello"` | TLS | Hello | `IP:Port` | TLS + Identity Handshake. |
-| `"udp"` | UDP | None | `IP:Port` | Raw UDP packets. |
-| `"udp-hello"` | UDP | Hello | `IP:Port` | **Stateless Envelope**: Wraps every packet with Identity + Payload. |
-| `"shm"` | SHM | None | File Path | Raw Memory Mapped File. |
-| `"shm-hello"` | SHM | Hello | File Path | SHM + Identity Handshake. |
+| `"tcp"` | Framed TCP | None | `IP:Port` | Length-prefixed TCP stream (4-byte Big-Endian header + payload). |
+| `"tcp-hello"` | Framed TCP | Hello | `IP:Port` | Framed TCP + Cap'n Proto Identity Handshake. |
+| `"tls"` | Framed TLS | None | `IP:Port` | Length-prefixed TLS stream (4-byte Big-Endian header + payload). |
+| `"tls-hello"` | Framed TLS | Hello | `IP:Port` | Framed TLS + Cap'n Proto Identity Handshake. |
+| `"udp"` | UDP | None | `IP:Port` | Raw UDP datagrams (up to 64KB, demultiplexed per remote peer on server). |
+| `"udp-hello"` | UDP | Hello | `IP:Port` | **Stateless Envelope**: Wraps every datagram with Identity + Payload. |
+| `"shm"` | SHM | None | File Path | Framed Memory-Mapped Ring Buffer IPC. |
+| `"shm-hello"` | SHM | Hello | File Path | SHM + Cap'n Proto Identity Handshake (`shm-hello:<identity>`). |
 
 ### 🔒 Intelligent Auto-Encryption (`auto-hello`)
 
@@ -132,15 +129,16 @@ The `ServiceAddress` is transmitted in `HelloMsg.FromAddress` during handshake, 
 You can specify a custom identity name for any protocol-aware profile by using the syntax `[profile]:[name]`.
 For example, `tcp-hello:my-service` will use the `tcp-hello` transport but identify itself as `my-service` during the handshake. If no name is provided, the library injects generic identifies (e.g., `TcpClient-Generic`).
 
-### High-Responsiveness Defaults
+### Unified Hybrid Timeouts & Handshake Defaults
 
-The library is configured to "fail-fast" to ensure system health and rapid reconnection. If no configuration is provided, the following defaults are applied:
+If `SocketConfig.Deadline` is left at `0` (and `DisableTimeout` is `false`), `Create` / `CreateWithConfig` applies `ResolveHybridTimeouts` automatically alongside fail-fast connect/handshake timeouts:
 
-| Condition | Handshake Timeout | Data Deadline (Idle Timeout) | Heartbeat Interval (Auto) |
-| :--- | :--- | :--- | :--- |
-| **Network (TCP/UDP/TLS)** | 500ms | 500ms | **200ms** (or Deadline/2.5) |
-| **Local (127.0.0.1)** | 200ms | 200ms | **80ms** (or Deadline/2.5) |
-| **Shared Memory (SHM)** | 100ms | 100ms | **40ms** (or Deadline/2.5) |
+| Condition | Handshake Timeout | Client Idle Timeout | Client Heartbeat (`Deadline / 2.5`) | Server Idle Timeout |
+| :--- | :--- | :--- | :--- | :--- |
+| **Local TCP/TLS** | 200ms | 60s | 24s | 10m (server outbound HB off by default) |
+| **Docker TCP/TLS (`DOCKER_ENV=true`)** | 500ms (remote) / 200ms (local) | 30s | 12s | 3m (server outbound HB off by default) |
+| **UDP** | 500ms / 200ms | 5s | Disabled | 5s |
+| **Shared Memory (SHM)** | 100ms | Infinite (`DisableTimeout: true`) | Disabled | Infinite (`DisableTimeout: true`) |
 
 ### Heartbeat Optimization & Thresholds
 

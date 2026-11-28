@@ -26,7 +26,7 @@ import (
 // TestScenario_CustomParameters demonstrates how to parameterize the socket
 // for custom scenario testing (latency, timeouts, heartbeats).
 func TestScenario_CustomParameters(t *testing.T) {
-	addr := "127.0.0.1:9999"
+	addr := freeTCPAddr(t)
 
 	// --- CUSTOM PARAMETERS ---
 	// You can customize these values to simulate different network scenarios.

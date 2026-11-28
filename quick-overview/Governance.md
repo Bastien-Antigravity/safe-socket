@@ -20,8 +20,9 @@ This document outlines the Behavior-Driven Development (BDD) specifications for 
 - **FEAT-004: Mutual Authentication**: Protocol for a secure identity handshake to verify the identity of both peers upon connection establishment.
 - **FEAT-005: Ultra-low Latency IPC**: Implementation details for the Shared Memory (SHM) transport, optimized for high-performance inter-process communication on the same host.
 - **FEAT-006: Graceful Shutdown**: Ensures that all buffers are flushed, pending operations are completed, and goroutines exit cleanly during a system shutdown.
-- **FEAT-007: Automatic Recovery**: Implements a jittered exponential backoff strategy for automatically reconnecting when a connection is lost.
+- **FEAT-007: Automatic Recovery**: Defines the fail-fast dial/handshake boundary (`SocketClient.Open`) and delegates exponential backoff and `AppConfig` live-sync reconnection to `microservice-toolbox/conn_manager`.
 - **FEAT-008: Memory Isolation**: Establishes resource boundaries and OOM protection by enforcing `MaxPayloadSize` and other memory-related constraints.
+- **FEAT-009: Auto-Hello & WireTap Telemetry**: Governs `auto`/`auto-hello` local-vs-remote transport selection (`MachineDetector`) and lock-free non-blocking `TelemetryConnection` emission.
 
 ---
 [Back to Map of Content](./Map-of-Content.md)

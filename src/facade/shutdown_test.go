@@ -45,30 +45,38 @@ func TestSynchronousShutdown(t *testing.T) {
 	addr, _ := server.GetAddr()
 
 	// 2. Accept in background
+	accepted := make(chan struct{}, 3)
+	releaseDelay := make(chan struct{})
 	go func() {
 		for {
 			conn, err := server.Accept()
 			if err != nil {
 				return
 			}
-			// Simulate work: don't close immediately
+			accepted <- struct{}{}
+			// Simulate work: wait until all test connections are established, then hold 500ms
 			go func() {
-				time.Sleep(500 * time.Millisecond)
+				<-releaseDelay
+				time.Sleep(510 * time.Millisecond)
 				_ = conn.Close()
 			}()
 		}
 	}()
 
-	// 3. Connect 3 clients
+	// 3. Connect 3 clients and wait until server accepted all 3
 	for i := 0; i < 3; i++ {
 		_, err := net.Dial("tcp", addr)
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
+	for i := 0; i < 3; i++ {
+		<-accepted
+	}
 
-	// 4. Close server
+	// 4. Close server while connections stay open for 510ms
 	start := time.Now()
+	close(releaseDelay)
 	err := server.Close()
 	if err != nil {
 		t.Fatal(err)

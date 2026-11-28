@@ -1,13 +1,14 @@
 # AGENTS.md: safe-socket
 
 ## Service Mission & Architecture Role
-`safe-socket` is the high-reliability TCP framing and transport library for the Bastien-Antigravity fleet. It solves network partitions, half-open sockets, and message fragmentation via automatic exponential backoff reconnection, 4-byte length-prefixed packet framing, and 30-second ping/pong heartbeat mechanisms.
+`safe-socket` is the high-reliability framed transport library for the Bastien-Antigravity fleet. It solves half-open sockets, message fragmentation, and local-vs-remote transport selection via 4-byte length-prefixed packet framing, activity-refreshed hybrid deadlines, and unilateral 0-length heartbeat frames at the `2.5x` safety ratio (`IdleTimeout / 2.5`). Exponential-backoff reconnection is orchestrated by `microservice-toolbox/go/pkg/conn_manager` above `SocketClient.Open()`.
 
-- **Ecosystem Role**: High-speed, robust TCP transport layer.
-- **Consumers**: `log-server`, `universal-logger` network sinks, inter-agent data streams.
+- **Ecosystem Role**: High-speed, robust transport layer (Framed TCP, TLS, UDP, Shared Memory).
+- **Consumers**: `log-server`, `notif-server`, `config-server`, `universal-logger`, `distributed-config`, `microservice-toolbox`.
+- **Interfaces**: Role-segregated `ClientSocket` (`CreateClient` / `CreateClientWithConfig`) and `ServerSocket` (`CreateServer` / `CreateServerWithConfig`), plus unified `Socket` (`Create` / `CreateWithConfig`) for backward compatibility.
 - **Protocol Contract**:
-  - Framing: Big-Endian 4-byte integer length header followed by byte payload.
-  - Heartbeats: `PING` / `PONG` frames automatically exchanged every 30s.
+  - Framing: Big-Endian 4-byte integer length header followed by byte payload (on `"tcp"`, `"tcp-hello"`, `"tls"`, `"tls-hello"`, `"auto"`, `"shm"`, and `"shm-hello"`).
+  - Heartbeats: Unilateral 0-length frames (`0x00000000`) dispatched by clients every `IdleTimeout / 2.5` (e.g., `24s` for `60s` local idle timeout, `12s` for `30s` Docker idle timeout); servers disable outbound heartbeats unless `HeartbeatInterval > 0` is explicitly configured.
 
 ## Key Build & Test Commands
 ```bash

@@ -18,7 +18,6 @@ package factory
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/Bastien-Antigravity/safe-socket/src/facade"
 	"github.com/Bastien-Antigravity/safe-socket/src/interfaces"
@@ -71,13 +70,68 @@ func CreateWithConfig(profileName, address string, config models.SocketConfig, s
 		return nil, err
 	}
 
+	p, resolvedCfg, err := prepareProfileAndConfig(profileName, address, config, st, socketType)
+	if err != nil {
+		return nil, err
+	}
+
+	if autoConnect {
+		return CreateOpenSocket(p, resolvedCfg, socketType)
+	}
+
+	return CreateSocket(p, resolvedCfg, socketType)
+}
+
+// CreateClient creates a role-segregated ClientSocket using unified hybrid defaults.
+func CreateClient(profileName, address, publicIP string, autoConnect bool) (interfaces.ClientSocket, error) {
+	return CreateClientWithConfig(profileName, address, models.SocketConfig{PublicIP: publicIP}, autoConnect)
+}
+
+// CreateClientWithConfig creates a role-segregated ClientSocket with explicit configuration.
+func CreateClientWithConfig(profileName, address string, config models.SocketConfig, autoConnect bool) (interfaces.ClientSocket, error) {
+	p, resolvedCfg, err := prepareProfileAndConfig(profileName, address, config, interfaces.SocketTypeClient, "client")
+	if err != nil {
+		return nil, err
+	}
+
+	client := facade.NewSocketClient(p, resolvedCfg)
+	if autoConnect {
+		if err := client.Open(); err != nil {
+			return nil, err
+		}
+	}
+	return client, nil
+}
+
+// CreateServer creates a role-segregated ServerSocket using unified hybrid defaults.
+func CreateServer(profileName, address, publicIP string, autoConnect bool) (interfaces.ServerSocket, error) {
+	return CreateServerWithConfig(profileName, address, models.SocketConfig{PublicIP: publicIP}, autoConnect)
+}
+
+// CreateServerWithConfig creates a role-segregated ServerSocket with explicit configuration.
+func CreateServerWithConfig(profileName, address string, config models.SocketConfig, autoConnect bool) (interfaces.ServerSocket, error) {
+	p, resolvedCfg, err := prepareProfileAndConfig(profileName, address, config, interfaces.SocketTypeServer, "server")
+	if err != nil {
+		return nil, err
+	}
+
+	server := facade.NewSocketServer(p, resolvedCfg)
+	if autoConnect {
+		if err := server.Listen(); err != nil {
+			return nil, err
+		}
+	}
+	return server, nil
+}
+
+func prepareProfileAndConfig(profileName, address string, config models.SocketConfig, st interfaces.SocketType, socketType string) (interfaces.SocketProfile, models.SocketConfig, error) {
 	// 1. Determine Identity and Profile Key
 	profileKey := profileName
 	if parts := strings.Split(profileName, ":"); len(parts) > 1 {
 		profileKey = parts[0]
 	}
 
-	// 2. Determine Timeout
+	// 2. Determine Handshake / Connect Timeout
 	timeout := int(config.HandshakeTimeout.Milliseconds())
 	if timeout <= 0 {
 		isLocal := utils.GetMachineDetector().IsLocalAddress(address)
@@ -91,21 +145,29 @@ func CreateWithConfig(profileName, address string, config models.SocketConfig, s
 		}
 	}
 
-	// 3. Apply Defaults to Config for runtime responsiveness
-	if config.Deadline == 0 {
-		config.Deadline = time.Duration(timeout) * time.Millisecond
+	// 3. Apply Unified Hybrid Timeout Defaults (or honor explicit infinite timeout)
+	if config.DisableTimeout || config.Deadline < 0 {
+		config.DisableTimeout = true
+		config.Deadline = 0
+		if config.HeartbeatInterval == 0 {
+			config.HeartbeatInterval = -1
+		}
+	} else if config.Deadline == 0 {
+		defaultDeadline, defaultHB := models.ResolveHybridTimeouts(profileKey, socketType, models.IsDockerRuntime())
+		config.Deadline = defaultDeadline
+		if defaultDeadline == 0 {
+			config.DisableTimeout = true
+		}
+		if config.HeartbeatInterval == 0 {
+			config.HeartbeatInterval = defaultHB
+		}
 	}
 
 	p, err := createProfile(profileName, address, st, timeout)
 	if err != nil {
-		return nil, err
+		return nil, config, err
 	}
-
-	if autoConnect {
-		return CreateOpenSocket(p, config, socketType)
-	}
-
-	return CreateSocket(p, config, socketType)
+	return p, config, nil
 }
 
 func createProfile(profileName, address string, st interfaces.SocketType, timeout int) (interfaces.SocketProfile, error) {
@@ -211,9 +273,15 @@ func createProfile(profileName, address string, st interfaces.SocketType, timeou
 
 	// SHM Support
 	case "shm":
-		return profiles.NewShmProfile(address, timeout), nil // address is path
+		if identity == "" {
+			identity = "ShmRaw-Generic"
+		}
+		return profiles.NewShmProfileWithIdentity(identity, address, timeout), nil
 	case "shm-hello":
-		return profiles.NewShmHelloProfile(address, timeout), nil
+		if identity == "" {
+			identity = "ShmHello-Generic"
+		}
+		return profiles.NewShmHelloProfileWithIdentity(identity, address, timeout), nil
 	default:
 		return nil, fmt.Errorf("unknown profile: %s", profileKey)
 	}

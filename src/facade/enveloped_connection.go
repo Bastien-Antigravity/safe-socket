@@ -76,16 +76,14 @@ func (e *EnvelopedConnection) Write(p []byte) (n int, err error) {
 // -----------------------------------------------------------------------------
 
 func (e *EnvelopedConnection) Read(p []byte) (n int, err error) {
-	// 1. Read wrapped packet from underlying transport
-	// Max UDP datagram size is 65535 bytes.
-	rawBuf := make([]byte, 65535)
-	nRaw, err := e.Conn.Read(rawBuf)
+	// 1. Read wrapped packet from underlying transport without fixed 64KB allocation
+	rawBuf, err := e.Conn.ReadMessage()
 	if err != nil {
 		return 0, err
 	}
 
 	// 2. Decapsulate
-	payload, identity, err := e.Proto.Decapsulate(rawBuf[:nRaw])
+	payload, identity, err := e.Proto.Decapsulate(rawBuf)
 	if err != nil {
 		return 0, err
 	}

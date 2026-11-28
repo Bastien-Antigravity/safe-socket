@@ -2,30 +2,39 @@ package transports
 
 // =============================================================================
 // ESSENTIAL PROCESS:
-// Implements UDP listener handling for receiving connectionless datagram packets
-// and converting them into virtual connection streams for the socket server.
+// Implements UDP listener handling with full 64KB datagram reads and per-peer
+// session demultiplexing so multi-packet and RUDP conversations stay routed to
+// their active session connection.
 //
 // DATA FLOW:
 // 1. Input: Local UDP bind address host:port and timeout duration.
-// 2. Logic: Binds net.ListenUDP; on Accept(), reads the initial datagram and creates a transient UdpSocket.
-// 3. Output: TransportConnection representing the peer datagram source.
+// 2. Logic: Binds net.ListenUDP, runs demuxLoop reading up to 65,535-byte datagrams,
+//    routes packets by remoteAddr to existing sessions or emits new sessions via Accept().
+// 3. Output: TransportConnection representing the peer datagram session.
 //
 // KEY PARAMETERS:
-// - ListenUDP: Binds UDP listening socket.
-// - UdpListener: Listener implementation for UDP datagrams.
+// - ListenUDP: Binds UDP listening socket and starts demuxLoop.
+// - UdpListener: Demultiplexing listener implementation for UDP datagrams.
 // =============================================================================
 
 import (
 	"net"
+	"sync"
 	"time"
 
 	"github.com/Bastien-Antigravity/safe-socket/src/interfaces"
 )
 
-// UdpListener implements interfaces.TransportListener for Connectionless UDP.
+// UdpListener implements interfaces.TransportListener for UDP with per-peer session demultiplexing.
 type UdpListener struct {
-	Conn    *net.UDPConn
-	Timeout time.Duration
+	Conn       *net.UDPConn
+	Timeout    time.Duration
+	sessionsMu sync.Mutex
+	sessions   map[string]*UdpSocket
+	acceptChan chan *UdpSocket
+	errChan    chan error
+	closed     chan struct{}
+	closeOnce  sync.Once
 }
 
 // -----------------------------------------------------------------------------
@@ -45,42 +54,92 @@ func ListenUDP(address string, timeout time.Duration) (interfaces.TransportListe
 	_ = conn.SetReadBuffer(4 * 1024 * 1024)
 	_ = conn.SetWriteBuffer(4 * 1024 * 1024)
 
-	return &UdpListener{
-		Conn:    conn,
-		Timeout: timeout,
-	}, nil
+	l := &UdpListener{
+		Conn:       conn,
+		Timeout:    timeout,
+		sessions:   make(map[string]*UdpSocket),
+		acceptChan: make(chan *UdpSocket, 128),
+		errChan:    make(chan error, 1),
+		closed:     make(chan struct{}),
+	}
+	go l.demuxLoop()
+	return l, nil
+}
+
+func (l *UdpListener) demuxLoop() {
+	buf := make([]byte, udpMaxDatagramSize)
+	for {
+		n, remoteAddr, err := l.Conn.ReadFromUDP(buf)
+		if err != nil {
+			select {
+			case <-l.closed:
+				return
+			default:
+				select {
+				case l.errChan <- err:
+				default:
+				}
+				return
+			}
+		}
+
+		pkt := make([]byte, n)
+		copy(pkt, buf[:n])
+
+		key := remoteAddr.String()
+		l.sessionsMu.Lock()
+		existing, ok := l.sessions[key]
+		if ok {
+			l.sessionsMu.Unlock()
+			existing.enqueuePacket(pkt)
+			continue
+		}
+
+		var session *UdpSocket
+		session = NewTransientUdpSocket(l.Conn, remoteAddr, pkt, l.Timeout, func() {
+			l.sessionsMu.Lock()
+			if cur, exists := l.sessions[key]; exists && cur == session {
+				delete(l.sessions, key)
+			}
+			l.sessionsMu.Unlock()
+		})
+		l.sessions[key] = session
+		l.sessionsMu.Unlock()
+
+		select {
+		case l.acceptChan <- session:
+		case <-l.closed:
+			_ = session.Close()
+			return
+		}
+	}
 }
 
 // -----------------------------------------------------------------------------
 
-// Accept "accepts" the next packet as if it were a new connection.
-// It blocks until a packet arrives, reads it, and returns a TransientUdpSocket
-// bound to that sender.
+// Accept waits for the next new remote UDP peer session and returns its demultiplexed socket.
 func (l *UdpListener) Accept() (interfaces.TransportConnection, error) {
-	// Buffer for the initial packet (Accept reads it to identify sender)
-	// 4KB should be enough for control frames / hello messages.
-	buf := make([]byte, 4096)
-
-	if l.Timeout > 0 {
-		_ = l.Conn.SetReadDeadline(time.Now().Add(l.Timeout))
-	}
-
-	// ReadFromUDP to get data AND sender address
-	n, remoteAddr, err := l.Conn.ReadFromUDP(buf)
-	if err != nil {
+	select {
+	case session := <-l.acceptChan:
+		return session, nil
+	case err := <-l.errChan:
 		return nil, err
+	case <-l.closed:
+		return nil, net.ErrClosed
 	}
-
-	// Create a Transient Socket wrapping this specific packet interaction
-	// The next Read() on this socket will return 'buf[:n]'.
-	// The next Write() on this socket will send to 'remoteAddr'.
-	return NewTransientUdpSocket(l.Conn, remoteAddr, buf[:n], l.Timeout), nil
 }
 
 // -----------------------------------------------------------------------------
 
 func (l *UdpListener) Close() error {
-	return l.Conn.Close()
+	var err error
+	l.closeOnce.Do(func() {
+		close(l.closed)
+		if l.Conn != nil {
+			err = l.Conn.Close()
+		}
+	})
+	return err
 }
 
 // -----------------------------------------------------------------------------

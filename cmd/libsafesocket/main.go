@@ -7,12 +7,13 @@ package main
 //
 // DATA FLOW:
 // 1. Input: C types (*C.char, C.int, *C.uchar) from foreign language runtimes.
-// 2. Logic: Translates C types, sanitizes strings, delegates to cgo_bridge, sets last error.
+// 2. Logic: Pins the OS thread across blocking CGO calls, sanitizes strings,
+//    delegates to cgo_bridge, and safely stores thread-local errors.
 // 3. Output: Integer handle identifiers, read/write byte counts, and exported C ABI functions.
 //
 // KEY PARAMETERS:
-// - c_safe_socket_create: C export for socket creation.
-// - c_safe_socket_read/write: C exports for buffered data transmission.
+// - SafeSocket_Create / SafeSocket_CreateExtended: C exports for socket creation.
+// - SafeSocket_Send / SafeSocket_Receive: C exports for framed I/O.
 // =============================================================================
 
 /*
@@ -24,8 +25,10 @@ import "C"
 
 import (
 	"fmt"
-	"github.com/Bastien-Antigravity/safe-socket/src/cgo_bridge"
+	"runtime"
 	"unsafe"
+
+	"github.com/Bastien-Antigravity/safe-socket/src/cgo_bridge"
 )
 
 func main() {}
@@ -42,18 +45,19 @@ func setError(err error) {
 
 //export SafeSocket_FreeString
 func SafeSocket_FreeString(ptr *C.char) {
-	if ptr != nil {
-		C.free(unsafe.Pointer(ptr))
-	}
+	C.free_socket_error(ptr)
 }
 
 //export SafeSocket_GetSocketError
 func SafeSocket_GetSocketError() *C.char {
-	return C.last_socket_error
+	return C.get_socket_error()
 }
 
 //export SafeSocket_Create
 func SafeSocket_Create(profileName, address, publicIP, socketType *C.char, autoConnect C.int) int32 {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
 	pName := cgo_bridge.SanitizeString(C.GoString(profileName))
 	addr := cgo_bridge.SanitizeString(C.GoString(address))
 	pIP := cgo_bridge.SanitizeString(C.GoString(publicIP))
@@ -67,6 +71,9 @@ func SafeSocket_Create(profileName, address, publicIP, socketType *C.char, autoC
 
 //export SafeSocket_CreateExtended
 func SafeSocket_CreateExtended(profileName, address, publicIP, socketType *C.char, handshakeTimeoutMs, deadlineMs, heartbeatIntervalMs C.int, autoConnect C.int) int32 {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
 	pName := cgo_bridge.SanitizeString(C.GoString(profileName))
 	addr := cgo_bridge.SanitizeString(C.GoString(address))
 	pIP := cgo_bridge.SanitizeString(C.GoString(publicIP))
@@ -84,6 +91,9 @@ func SafeSocket_CreateExtended(profileName, address, publicIP, socketType *C.cha
 
 //export SafeSocket_Open
 func SafeSocket_Open(handle int32) int32 {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
 	err := cgo_bridge.Open(handle)
 	setError(err)
 	if err != nil {
@@ -94,6 +104,9 @@ func SafeSocket_Open(handle int32) int32 {
 
 //export SafeSocket_Close
 func SafeSocket_Close(handle int32) int32 {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
 	err := cgo_bridge.Close(handle)
 	setError(err)
 	if err != nil {
@@ -104,6 +117,9 @@ func SafeSocket_Close(handle int32) int32 {
 
 //export SafeSocket_Send
 func SafeSocket_Send(handle int32, data *C.uchar, length C.int) int32 {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
 	buf := C.GoBytes(unsafe.Pointer(data), length)
 	n, err := cgo_bridge.Send(handle, buf)
 	setError(err)
@@ -112,6 +128,9 @@ func SafeSocket_Send(handle int32, data *C.uchar, length C.int) int32 {
 
 //export SafeSocket_Receive
 func SafeSocket_Receive(handle int32, buffer *C.uchar, maxLength C.int) int32 {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
 	data, err := cgo_bridge.Receive(handle, int(maxLength))
 	setError(err)
 	if err != nil {
@@ -131,6 +150,9 @@ func SafeSocket_Receive(handle int32, buffer *C.uchar, maxLength C.int) int32 {
 
 //export SafeSocket_Listen
 func SafeSocket_Listen(handle int32) int32 {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
 	err := cgo_bridge.Listen(handle)
 	setError(err)
 	if err != nil {
@@ -141,6 +163,9 @@ func SafeSocket_Listen(handle int32) int32 {
 
 //export SafeSocket_Accept
 func SafeSocket_Accept(handle int32) int32 {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
 	connHandle, err := cgo_bridge.Accept(handle)
 	setError(err)
 	return connHandle
@@ -148,6 +173,9 @@ func SafeSocket_Accept(handle int32) int32 {
 
 //export SafeSocket_SetIdleTimeout
 func SafeSocket_SetIdleTimeout(handle int32, seconds C.double) int32 {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
 	err := cgo_bridge.SetIdleTimeout(handle, float64(seconds))
 	setError(err)
 	if err != nil {
@@ -158,6 +186,9 @@ func SafeSocket_SetIdleTimeout(handle int32, seconds C.double) int32 {
 
 //export SafeSocket_SetDeadline
 func SafeSocket_SetDeadline(handle int32, seconds C.double) int32 {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
 	err := cgo_bridge.SetDeadline(handle, float64(seconds))
 	setError(err)
 	if err != nil {

@@ -27,7 +27,7 @@ import (
 // TestServerConfigDeadline verifies that setting Deadline in SocketConfig
 // enforces a timeout on the accepted connection.
 func TestServerConfigDeadline(t *testing.T) {
-	addr := "127.0.0.1:9050"
+	addr := freeTCPAddr(t)
 
 	// 1. Create Server with Configured Deadline (Short: 200ms)
 	profile := profiles.NewTcpServerProfile("TcpServer", addr, 5000)
@@ -98,7 +98,7 @@ func TestServerConfigDeadline(t *testing.T) {
 
 // TestClientDynamicDeadline verifies client can set deadlines dynamically.
 func TestClientDynamicDeadline(t *testing.T) {
-	addr := "127.0.0.1:9051"
+	addr := freeTCPAddr(t)
 
 	// 1. Setup Server (Explicit 1s deadline to allow for the 500ms test sleep)
 	config := models.SocketConfig{Deadline: 1 * time.Second}
@@ -163,7 +163,7 @@ func TestClientDynamicDeadline(t *testing.T) {
 
 // TestIdleTimeoutRefresh verifies that sending/receiving data refreshes the deadline.
 func TestIdleTimeoutRefresh(t *testing.T) {
-	addr := "127.0.0.1:9052"
+	addr := freeTCPAddr(t)
 
 	// 1. Setup Server with short idle timeout (300ms)
 	profile := profiles.NewTcpServerProfile("TcpServer", addr, 5000)

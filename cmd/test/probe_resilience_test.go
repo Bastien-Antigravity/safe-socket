@@ -151,3 +151,56 @@ func TestTCPInvalidProtocolFailsStrictly(t *testing.T) {
 		t.Fatal("Timeout waiting for server to reject invalid protocol handshake")
 	}
 }
+
+// -----------------------------------------------------------------------------
+
+// TestHandshakeSlowLorisTimeout verifies SocketServer.Accept enforces the tight
+// HandshakeTimeout during WaitInitiation instead of blocking for the long-lived
+// post-handshake runtime Deadline (e.g. 10m).
+func TestHandshakeSlowLorisTimeout(t *testing.T) {
+	config := models.SocketConfig{
+		Deadline:         10 * time.Minute,
+		HandshakeTimeout: 150 * time.Millisecond,
+	}
+	server, err := safesocket.CreateServerWithConfig("tcp-hello:slowloris-server", "127.0.0.1:0", config, true)
+	if err != nil {
+		t.Fatalf("Failed to create server: %v", err)
+	}
+	defer func() { _ = server.Close() }()
+
+	addr, err := server.GetAddr()
+	if err != nil {
+		t.Fatalf("Failed to get server address: %v", err)
+	}
+
+	start := time.Now()
+	serverErr := make(chan error, 1)
+	go func() {
+		_, err := server.Accept()
+		serverErr <- err
+	}()
+
+	// Slow-Loris client: connect, send 1 incomplete header byte, hold socket open
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		t.Fatalf("Failed to dial server: %v", err)
+	}
+	defer func() { _ = conn.Close() }()
+
+	if _, err := conn.Write([]byte{0x00}); err != nil {
+		t.Fatalf("Failed to write partial handshake byte: %v", err)
+	}
+
+	select {
+	case err := <-serverErr:
+		elapsed := time.Since(start)
+		if err == nil {
+			t.Fatal("Expected server Accept to fail on incomplete Slow-Loris handshake")
+		}
+		if elapsed > 600*time.Millisecond {
+			t.Fatalf("Slow-Loris handshake took too long (%v > 600ms)", elapsed)
+		}
+	case <-time.After(1500 * time.Millisecond):
+		t.Fatal("Server Accept blocked past HandshakeTimeout (Slow-Loris vulnerability)")
+	}
+}

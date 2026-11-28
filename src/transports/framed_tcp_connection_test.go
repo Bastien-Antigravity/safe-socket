@@ -17,6 +17,8 @@ package transports
 import (
 	"bytes"
 	"crypto/rand"
+	"crypto/tls"
+	"errors"
 	"io"
 	"net"
 	"testing"
@@ -239,5 +241,79 @@ func TestFramedTCP_ShortBufferRecovery(t *testing.T) {
 	}
 	if !bytes.Equal(properBuf[:n], payload) {
 		t.Fatalf("Payload mismatch after short buffer recovery: got %q, want %q", properBuf[:n], payload)
+	}
+}
+
+// -----------------------------------------------------------------------------
+
+type failingWriteConn struct {
+	net.Conn
+	writeCalls int
+	closed     bool
+}
+
+func (f *failingWriteConn) Write(p []byte) (int, error) {
+	f.writeCalls++
+	if len(p) > 2 {
+		return 2, errors.New("simulated mid-frame write failure")
+	}
+	return 0, errors.New("simulated write failure")
+}
+
+func (f *failingWriteConn) Close() error {
+	f.closed = true
+	return nil
+}
+
+func (f *failingWriteConn) SetReadDeadline(time.Time) error  { return nil }
+func (f *failingWriteConn) SetWriteDeadline(time.Time) error { return nil }
+
+func TestFramedTCP_TLSUnwrapAndCloseOnPartialWrite(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
+	defer func() { _ = ln.Close() }()
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		c, err := ln.Accept()
+		if err == nil {
+			_ = c.Close()
+		}
+	}()
+
+	rawTCP, err := net.Dial("tcp", ln.Addr().String())
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	defer func() { _ = rawTCP.Close() }()
+
+	tlsConn := tls.Client(rawTCP, &tls.Config{InsecureSkipVerify: true})
+	sock := NewFramedTCPSocket(tlsConn, time.Second)
+
+	if sock.underlyingTCPConn() == nil {
+		t.Fatal("Expected underlyingTCPConn() to unwrap *tls.Conn to *net.TCPConn")
+	}
+	if err := sock.SetNoDelay(true); err != nil {
+		t.Fatalf("SetNoDelay failed on TLS connection: %v", err)
+	}
+	if err := sock.SetKeepAlive(30 * time.Second); err != nil {
+		t.Fatalf("SetKeepAlive failed on TLS connection: %v", err)
+	}
+	<-done
+
+	mock := &failingWriteConn{}
+	failSock := NewFramedTCPSocket(mock, 0)
+	_, err = failSock.Write([]byte("payload"))
+	if err == nil {
+		t.Fatal("Expected Write to fail")
+	}
+	if mock.writeCalls != 1 {
+		t.Fatalf("Expected single contiguous frame Write syscall, got %d", mock.writeCalls)
+	}
+	if !mock.closed {
+		t.Fatal("Expected partial/failed Write to close underlying socket immediately")
 	}
 }

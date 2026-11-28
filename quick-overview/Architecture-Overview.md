@@ -57,12 +57,13 @@ The primary entry point for the library.
 - **Key Functions**: `Create` (simplified) and `CreateWithConfig` (advanced).
 
 ### 2. Facade Layer (`src/facade`)
-Implements the high-level `interfaces.Socket` API (`Open`, `Close`, `Send`, `Receive`, `Accept`).
-- **SocketClient/SocketServer**: Manage the lifecycle of client and server connections.
+Implements the role-segregated `interfaces.ClientSocket` and `interfaces.ServerSocket` APIs (and unified `interfaces.Socket` for backward compatibility).
+- **SocketClient/SocketServer**: Manage the lifecycle of client and server connections (backoff/retry orchestration lives in `conn_manager`).
 - **Connection Wrappers**:
     - `HandshakeConnection`: Manages the identity exchange.
     - `EnvelopedConnection`: Handles per-packet encapsulation for stateless protocols (e.g., UDP).
-    - `ReliableConnection`: Layer for ensuring delivery (where applicable).
+    - `HeartbeatConnection`: Dispatches unilateral 0-length heartbeat frames at the `2.5x` safety ratio (`IdleTimeout / 2.5`).
+    - `TelemetryConnection`: Lock-free atomic WireTap decorator.
 
 ### 3. Protocol Layer (`src/protocols`)
 Defines data structures and handshakes above the transport layer.
@@ -88,7 +89,6 @@ Handles raw I/O operations.
 - **Unified Identity Access**: Peer information can be retrieved using the `safesocket.GetIdentity(conn)` helper.
 
 ### Performance Defaults
-The library defaults to "Fail-Fast" timeouts to ensure system health in high-frequency environments:
-- **Network**: 500ms
-- **Local (127.0.0.1)**: 200ms
-- **SHM**: 100ms
+The library separates fail-fast handshake timeouts from transport-aware hybrid idle timeouts (`ResolveHybridTimeouts`):
+- **Handshake Timeouts**: Network `500ms`, Local `200ms`, SHM `100ms`.
+- **Hybrid Idle Timeouts**: Local TCP (`60s` client / `10m` server), Docker TCP (`30s` client / `3m` server), UDP (`5s`), SHM (`0` infinite wait).

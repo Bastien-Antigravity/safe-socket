@@ -22,6 +22,8 @@ import (
 	"github.com/Bastien-Antigravity/safe-socket/src/interfaces"
 )
 
+var emptyHeartbeatFrame = []byte{}
+
 // HeartbeatConnection wraps a transport and periodically sends 0-length heartbeats.
 type HeartbeatConnection struct {
 	interfaces.TransportConnection
@@ -29,14 +31,17 @@ type HeartbeatConnection struct {
 	closeOnce     sync.Once
 	mu            sync.Mutex
 	writeMu       sync.Mutex
-	readMu        sync.Mutex
 	interval      time.Duration
+	disabled      bool
 }
+
+// -----------------------------------------------------------------------------
 
 func NewHeartbeatConnection(conn interfaces.TransportConnection, interval time.Duration) *HeartbeatConnection {
 	h := &HeartbeatConnection{
 		TransportConnection: conn,
 		interval:            interval,
+		disabled:            interval <= 0,
 	}
 	if interval > 0 {
 		h.stopHeartbeat = make(chan struct{})
@@ -45,6 +50,8 @@ func NewHeartbeatConnection(conn interfaces.TransportConnection, interval time.D
 	return h
 }
 
+// -----------------------------------------------------------------------------
+
 func (h *HeartbeatConnection) start(interval time.Duration, stopChan chan struct{}) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -52,7 +59,7 @@ func (h *HeartbeatConnection) start(interval time.Duration, stopChan chan struct
 		select {
 		case <-ticker.C:
 			//nolint:staticcheck // QF1008: Explicit selector preferred for clarity and future-proofing
-			_, err := h.Write([]byte{})
+			_, err := h.Write(emptyHeartbeatFrame)
 			if err != nil {
 				// FAIL-FAST: Close the connection if heartbeat fails.
 				_ = h.TransportConnection.Close()
@@ -64,23 +71,30 @@ func (h *HeartbeatConnection) start(interval time.Duration, stopChan chan struct
 	}
 }
 
+// -----------------------------------------------------------------------------
+
 func (h *HeartbeatConnection) Write(p []byte) (n int, err error) {
+	if h.disabled {
+		return h.TransportConnection.Write(p)
+	}
 	h.writeMu.Lock()
 	defer h.writeMu.Unlock()
 	return h.TransportConnection.Write(p)
 }
 
+// -----------------------------------------------------------------------------
+
 func (h *HeartbeatConnection) Read(p []byte) (n int, err error) {
-	h.readMu.Lock()
-	defer h.readMu.Unlock()
 	return h.TransportConnection.Read(p)
 }
 
+// -----------------------------------------------------------------------------
+
 func (h *HeartbeatConnection) ReadMessage() ([]byte, error) {
-	h.readMu.Lock()
-	defer h.readMu.Unlock()
 	return h.TransportConnection.ReadMessage()
 }
+
+// -----------------------------------------------------------------------------
 
 func (h *HeartbeatConnection) Close() error {
 	h.closeOnce.Do(func() {
@@ -94,7 +108,13 @@ func (h *HeartbeatConnection) Close() error {
 	return h.TransportConnection.Close()
 }
 
+// -----------------------------------------------------------------------------
+
 func (h *HeartbeatConnection) SetIdleTimeout(d time.Duration) error {
+	if h.disabled {
+		return h.TransportConnection.SetIdleTimeout(d)
+	}
+
 	h.mu.Lock()
 	defer h.mu.Unlock()
 

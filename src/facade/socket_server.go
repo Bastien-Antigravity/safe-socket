@@ -146,13 +146,25 @@ func (s *SocketServer) Accept() (interfaces.TransportConnection, error) {
 
 		conn = tracker
 
-		// 1b. Apply Server Config Deadline (Idle Timeout)
-		// If s.Config.Deadline is set (even to 0), we use it as the Idle Timeout.
-		idleTimeout := time.Duration(s.Profile.GetConnectTimeout()) * time.Millisecond
-		if s.Config.Deadline >= 0 {
-			idleTimeout = s.Config.Deadline
+		// 1b. Resolve Pre-Handshake vs. Post-Handshake Timeouts
+		s.mu.RLock()
+		cfgDeadline := s.Config.Deadline
+		cfgDisableTimeout := s.Config.DisableTimeout
+		cfgHeartbeat := s.Config.HeartbeatInterval
+		cfgHandshakeTimeout := s.Config.HandshakeTimeout
+		s.mu.RUnlock()
+
+		handshakeTimeout := time.Duration(s.Profile.GetConnectTimeout()) * time.Millisecond
+		if cfgHandshakeTimeout > 0 {
+			handshakeTimeout = cfgHandshakeTimeout
 		}
-		_ = conn.SetIdleTimeout(idleTimeout)
+
+		idleTimeout := handshakeTimeout
+		if cfgDisableTimeout || cfgDeadline < 0 {
+			idleTimeout = 0
+		} else if cfgDeadline > 0 {
+			idleTimeout = cfgDeadline
+		}
 
 		// 1c. Apply Reliability Layer if requested (UDP only)
 		if s.Config.Reliable && s.Profile.GetTransport() == interfaces.TransportUDP {
@@ -165,16 +177,17 @@ func (s *SocketServer) Accept() (interfaces.TransportConnection, error) {
 		if s.Profile.GetTransport() == interfaces.TransportUDP &&
 			s.Profile.GetProtocol() == interfaces.ProtocolHello {
 
+			_ = conn.SetIdleTimeout(idleTimeout)
 			// Wrap connection to handle Per-Packet Decapsulation
 			config := models.SocketConfig{} // Server doesn't usually use config for receiving, but wrapper needs it struct
 			conn = NewEnvelopedConnection(conn, s.Profile, config)
 
 		} else if s.Profile.GetProtocol() != "" && s.Profile.GetProtocol() != interfaces.ProtocolNone {
-			// Case B: Connection-Oriented (TCP) + Hello
-			// Perform Standard Handshake (Wait for Client to send Hello)
-			proto := protocols.NewHelloProtocol()
+			// Case B: Connection-Oriented (TCP/TLS/SHM) + Hello
+			// Enforce strict HandshakeTimeout during WaitInitiation to prevent Slow-Loris stalls.
+			_ = conn.SetIdleTimeout(handshakeTimeout)
 
-			// Note: The handshake itself will respect the Deadline set in 1b because it uses Read/Write on the conn.
+			proto := protocols.NewHelloProtocol()
 			helloMsg, err := proto.WaitInitiation(conn)
 			if err != nil {
 				_ = conn.Close()
@@ -183,10 +196,13 @@ func (s *SocketServer) Accept() (interfaces.TransportConnection, error) {
 					s.Logger.Debug(fmt.Sprintf("Inbound client disconnected before handshake: %v", err))
 					continue
 				}
-				// Protocol decoding or schema validation failure from an active client
+				// Protocol decoding, timeout, or schema validation failure from an active client
 				s.Logger.Warning(fmt.Sprintf("Inbound client handshake failed: %v", err))
 				return nil, fmt.Errorf("inbound client handshake failed: %w", err)
 			}
+
+			// Handshake succeeded: upgrade connection to the post-handshake runtime idleTimeout.
+			_ = conn.SetIdleTimeout(idleTimeout)
 
 			if helloMsg != nil {
 				peerName, _ = helloMsg.FromName()
@@ -194,12 +210,16 @@ func (s *SocketServer) Accept() (interfaces.TransportConnection, error) {
 
 			// Wrap with identity
 			conn = NewHandshakeConnection(conn, helloMsg)
+		} else {
+			_ = conn.SetIdleTimeout(idleTimeout)
 		}
 
-		// 3. Heartbeat Optimization & Safety Ratio
-		heartbeatInterval := s.Config.HeartbeatInterval
-		if heartbeatInterval == 0 {
-			heartbeatInterval = time.Duration(float64(idleTimeout) / 2.5)
+		// 3. Server Heartbeat Policy & Safety Ratio
+		// Servers do NOT spawn outbound heartbeat tickers unless explicitly requested (> 0),
+		// preventing traffic storms and buffer stalls on unidirectional client streams.
+		heartbeatInterval := cfgHeartbeat
+		if heartbeatInterval <= 0 || idleTimeout == 0 {
+			heartbeatInterval = 0
 		} else if idleTimeout > 0 && heartbeatInterval < idleTimeout && float64(heartbeatInterval)*2.5 > float64(idleTimeout) {
 			// If user provided an unsafe heartbeat (too close to deadline), adjust it
 			newHeartbeat := time.Duration(float64(idleTimeout) / 2.5)
@@ -235,12 +255,9 @@ func (s *SocketServer) Accept() (interfaces.TransportConnection, error) {
 			return trackedUDP, nil
 		}
 
-		if idleTimeout > 0 && idleTimeout < threshold {
+		if heartbeatInterval > 0 && idleTimeout > 0 && idleTimeout < threshold {
 			s.Logger.Info(fmt.Sprintf("Heartbeat disabled: IdleTimeout (%v) is below the threshold for %s transport.", idleTimeout, transportName))
-			hbConn := NewHeartbeatConnection(conn, 0)
-			trackedConn := WrapConnectionWithTelemetry(hbConn, "server", string(s.Profile.GetTransport()), profileName, peerName, s.Profile.GetAddress(), "")
-			tracker.setOuter(trackedConn)
-			return trackedConn, nil
+			heartbeatInterval = 0
 		}
 
 		hbConn := NewHeartbeatConnection(conn, heartbeatInterval)
@@ -275,6 +292,7 @@ func (s *SocketServer) Close() error {
 	s.mu.Lock()
 	ln := s.listener
 	s.listener = nil
+	drainTimeout := s.Config.Deadline
 	s.mu.Unlock()
 
 	if ln == nil {
@@ -289,8 +307,7 @@ func (s *SocketServer) Close() error {
 		close(waitDone)
 	}()
 
-	drainTimeout := s.Config.Deadline
-	if drainTimeout <= 0 {
+	if drainTimeout <= 0 || drainTimeout > 5*time.Second {
 		drainTimeout = 5 * time.Second
 	}
 
@@ -400,6 +417,9 @@ func (s *SocketServer) SetWriteDeadline(t time.Time) error {
 
 // SetIdleTimeout updates the internal idle timeout for newly accepted connections.
 func (s *SocketServer) SetIdleTimeout(d time.Duration) error {
+	s.mu.Lock()
 	s.Config.Deadline = d
+	s.Config.DisableTimeout = d <= 0
+	s.mu.Unlock()
 	return nil
 }

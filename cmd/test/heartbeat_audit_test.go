@@ -30,10 +30,15 @@ func TestHeartbeatAudit(t *testing.T) {
 	for _, tr := range transports {
 		t.Run(tr, func(t *testing.T) {
 			path := "test_heartbeat_" + tr
-			addr := "127.0.0.1:9100"
-			if tr == "shm" {
+			var addr string
+			switch tr {
+			case "udp":
+				addr = freeUDPAddr(t)
+			case "shm":
 				addr = path
 				defer func() { _ = os.Remove(path) }()
+			default:
+				addr = freeTCPAddr(t)
 			}
 
 			// Configuration: Tight deadline (500ms), fast heartbeats (100ms)

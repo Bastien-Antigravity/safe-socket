@@ -14,16 +14,16 @@ status: active
 ## 🚀 Core Features
 
 -   **Modular Transports**:
-    -   **Framed TCP**: Reliable, persistent connections with message framing. Optimizes `Read()` via buffering to support safe buffer pooling (prevents header loss on short reads). 
-    -   **Heartbeat Support**: Automatically handles 0-length frames as heartbeats. Includes an **Adaptive safety-ratio (2.5x)** that ensures heartbeats always fire before an idle timeout occurs.
-    -   **UDP**: High-speed, connectionless communication with optional reliability layers.
-    -   **Shared Memory (SHM)**: Ultra-low latency IPC for local processes using memory-mapped files (Ring Buffer).
+    -   **Framed TCP**: Reliable, persistent connections with single-syscall message framing (stack `[512]byte` `0 allocs/op` for small frames `<= 508B`, `net.Buffers` `writev` for large cleartext TCP frames, and coalesced single records for TLS). Optimizes `Read()` via `Peek`/`Discard` to support safe buffer pooling.
+    -   **Heartbeat Support**: Client-driven unilateral 0-length heartbeat frames at the **2.5x safety ratio (`IdleTimeout / 2.5`)**. Servers default to `HeartbeatInterval = 0` so unidirectional producer clients never suffer heartbeat traffic storms or kernel buffer stalls.
+    -   **UDP**: High-speed, connectionless datagram transport with 65KB demultiplexed session channels and multi-packet `ReliableConnection` ACKs/retries.
+    -   **Shared Memory (SHM)**: Ultra-low latency IPC for local processes using memory-mapped files (Ring Buffer) with isolated service identities, reconnectable listeners, and adaptive spin-wait backoff (`1µs -> 50µs`).
 -   **Intelligent Protocols**:
-    -   **Auto-Encryption**: Automatically detects local vs remote machines using `MachineDetector`, switching seamlessly between unencrypted framed TCP (zero CPU overhead) and TLS without modifying client application code.
-    -   **Hello Protocol**: Identity exchange handshake with dynamic service address advertising (`ServiceAddress`) for automated peer discovery.
+    -   **Auto-Encryption**: Automatically detects local vs remote machines using `MachineDetector`, switching seamlessly between unencrypted framed TCP (zero CPU overhead) and TLS (with full `TCP_NODELAY`, `SO_KEEPALIVE`, and 4MB buffer tuning via `underlyingTCPConn()`).
+    -   **Hello Protocol**: Two-phase identity handshake enforcing tight `HandshakeTimeout` (`200ms`/`500ms`) during `WaitInitiation` before upgrading accepted sessions to runtime `IdleTimeout`, plus dynamic service address advertising (`ServiceAddress`).
     -   **Stateless Envelope (UDP)**: Zero-handshake authentication where every packet carries the sender's identity and payload.
--   **Unified Facade**: Interact with any transport using `Open()`, `Close()`, `Send()`, `Receive()`, and `Accept()`.
-- **Aggressive Responsiveness**: Optimized for high-frequency microservice environments with extremely tight default timeouts (500ms network / 100ms SHM) and an active activity-refresh deadline model.
+-   **Role-Segregated & Unified Facades**: Use explicit `CreateClient` (`ClientSocket`) and `CreateServer` (`ServerSocket`) entrypoints, or the legacy `Create` / `CreateHybrid` facades.
+- **Hybrid Timeout Matrix**: Uses `ResolveHybridTimeouts` (`60s` client / `10m` server local TCP; `30s` client / `3m` server Docker TCP; `5s` UDP; `0` infinite SHM), honors explicit `DisableTimeout: true` / `SetIdleTimeout(0)`, and preserves custom per-operation `SetReadDeadline` / `SetWriteDeadline` values.
 
 ### 🚀 Polyglot SDK
 
@@ -45,5 +45,6 @@ The behavior of this microservice is governed by strict specifications in the **
 - **Identity Handshake**: [[FEAT-004-Identity-Handshake|FEAT-004: Mutual Authentication]]
 - **Shared Memory**: [[FEAT-005-Shared-Memory-Transport|FEAT-005: Ultra-low Latency IPC]]
 - **Graceful Shutdown**: [[FEAT-006-Graceful-Shutdown|FEAT-006: Safe Termination]]
-- **Reconnection Strategy**: [[FEAT-007-Reconnection-Strategy|FEAT-007: Automatic Recovery]]
+- **Reconnection Strategy**: [[FEAT-007-Reconnection-Strategy|FEAT-007: Fail-Fast & Fleet Recovery]]
 - **Resource Boundaries**: [[FEAT-008-Resource-Boundaries|FEAT-008: Memory Isolation]]
+- **Auto-Hello & Telemetry**: [[FEAT-009-Auto-Hello-And-WireTap-Telemetry|FEAT-009: Auto-Hello & WireTap Telemetry]]

@@ -17,6 +17,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/Bastien-Antigravity/safe-socket/src/facade"
+	"github.com/Bastien-Antigravity/safe-socket/src/interfaces"
 	"github.com/Bastien-Antigravity/safe-socket/src/models"
 )
 
@@ -79,5 +81,119 @@ func TestAutoHelloProfile_LocalVsRemote(t *testing.T) {
 	}
 	if remoteSocket == nil {
 		t.Fatal("Expected remoteSocket to be non-nil")
+	}
+}
+
+func TestUnifiedHybridTimeoutAndInfiniteWait(t *testing.T) {
+	// 1. SHM via Create() and CreateHybrid() must preserve Deadline=0 & DisableTimeout=true
+	shmSock, err := Create("shm-hello:svc-shm", "/tmp/test_shm_timeout", "", "client", false)
+	if err != nil {
+		t.Fatalf("Create(shm-hello) failed: %v", err)
+	}
+	shmClient := shmSock.(*facade.SocketClient)
+	if !shmClient.Config.DisableTimeout || shmClient.Config.Deadline != 0 {
+		t.Fatalf("Expected SHM Create to preserve infinite wait (DisableTimeout=true, Deadline=0), got %+v", shmClient.Config)
+	}
+
+	shmHybridCfg := models.NewHybridSocketConfig("shm-hello", "client", "", false)
+	shmHybridSock, err := CreateWithConfig("shm-hello:svc-shm", "/tmp/test_shm_hybrid", shmHybridCfg, "client", false)
+	if err != nil {
+		t.Fatalf("CreateWithConfig(shm-hello) failed: %v", err)
+	}
+	shmHybridClient := shmHybridSock.(*facade.SocketClient)
+	if !shmHybridClient.Config.DisableTimeout || shmHybridClient.Config.Deadline != 0 {
+		t.Fatalf("Expected SHM Hybrid to preserve infinite wait, got %+v", shmHybridClient.Config)
+	}
+
+	// 2. Explicit DisableTimeout: true and Deadline: -1 must result in Deadline=0 (infinite)
+	infSock1, err := CreateWithConfig("tcp", "127.0.0.1:0", models.SocketConfig{DisableTimeout: true}, "client", false)
+	if err != nil {
+		t.Fatalf("CreateWithConfig(DisableTimeout: true) failed: %v", err)
+	}
+	c1 := infSock1.(*facade.SocketClient)
+	if !c1.Config.DisableTimeout || c1.Config.Deadline != 0 || c1.Config.HeartbeatInterval != -1 {
+		t.Fatalf("Expected infinite config, got %+v", c1.Config)
+	}
+
+	infSock2, err := CreateWithConfig("tcp", "127.0.0.1:0", models.SocketConfig{Deadline: -1}, "server", false)
+	if err != nil {
+		t.Fatalf("CreateWithConfig(Deadline: -1) failed: %v", err)
+	}
+	s2 := infSock2.(*facade.SocketServer)
+	if !s2.Config.DisableTimeout || s2.Config.Deadline != 0 || s2.Config.HeartbeatInterval != -1 {
+		t.Fatalf("Expected infinite server config, got %+v", s2.Config)
+	}
+
+	// 3. Standard Create("tcp") uses ResolveHybridTimeouts (60s/24s local client, 10m/0s local server)
+	expectedCliD, expectedCliHB := models.ResolveHybridTimeouts("tcp", "client", models.IsDockerRuntime())
+	tcpCliSock, err := Create("tcp", "127.0.0.1:0", "", "client", false)
+	if err != nil {
+		t.Fatalf("Create(tcp client) failed: %v", err)
+	}
+	tcpCli := tcpCliSock.(*facade.SocketClient)
+	if tcpCli.Config.Deadline != expectedCliD || tcpCli.Config.HeartbeatInterval != expectedCliHB {
+		t.Fatalf("Expected hybrid TCP client (%v, %v), got (%v, %v)", expectedCliD, expectedCliHB, tcpCli.Config.Deadline, tcpCli.Config.HeartbeatInterval)
+	}
+
+	expectedSrvD, expectedSrvHB := models.ResolveHybridTimeouts("tcp", "server", models.IsDockerRuntime())
+	tcpSrvSock, err := Create("tcp", "127.0.0.1:0", "", "server", false)
+	if err != nil {
+		t.Fatalf("Create(tcp server) failed: %v", err)
+	}
+	tcpSrv := tcpSrvSock.(*facade.SocketServer)
+	if tcpSrv.Config.Deadline != expectedSrvD || tcpSrv.Config.HeartbeatInterval != expectedSrvHB {
+		t.Fatalf("Expected hybrid TCP server (%v, %v), got (%v, %v)", expectedSrvD, expectedSrvHB, tcpSrv.Config.Deadline, tcpSrv.Config.HeartbeatInterval)
+	}
+}
+
+func TestRoleSegregatedClientAndServer(t *testing.T) {
+	srv, err := CreateServer("tcp-hello:role-srv", "127.0.0.1:0", "127.0.0.1", true)
+	if err != nil {
+		t.Fatalf("CreateServer failed: %v", err)
+	}
+	defer func() { _ = srv.Close() }()
+
+	var _ interfaces.ServerSocket = srv
+	addr, err := srv.GetAddr()
+	if err != nil {
+		t.Fatalf("GetAddr failed: %v", err)
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		conn, err := srv.Accept()
+		if err != nil {
+			errCh <- err
+			return
+		}
+		defer func() { _ = conn.Close() }()
+		msg, err := conn.ReadMessage()
+		if err != nil {
+			errCh <- err
+			return
+		}
+		_, err = conn.Write(msg)
+		errCh <- err
+	}()
+
+	cli, err := CreateClient("tcp-hello:role-cli", addr, "127.0.0.1", true)
+	if err != nil {
+		t.Fatalf("CreateClient failed: %v", err)
+	}
+	defer func() { _ = cli.Close() }()
+
+	var _ interfaces.ClientSocket = cli
+	if err := cli.Send([]byte("ROLE_SEGREGATED_OK")); err != nil {
+		t.Fatalf("Client Send failed: %v", err)
+	}
+	resp, err := cli.ReadMessage()
+	if err != nil {
+		t.Fatalf("Client ReadMessage failed: %v", err)
+	}
+	if string(resp) != "ROLE_SEGREGATED_OK" {
+		t.Fatalf("Unexpected response: %q", string(resp))
+	}
+	if err := <-errCh; err != nil {
+		t.Fatalf("Server error: %v", err)
 	}
 }

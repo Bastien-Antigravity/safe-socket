@@ -22,21 +22,19 @@ import "C"
 
 import (
 	"sync"
+	"sync/atomic"
 )
 
 var (
-	Registry    sync.Map
-	NextHandle  int32
-	RegistryMut sync.Mutex
+	Registry   sync.Map
+	NextHandle atomic.Int32
 )
 
 // Register stores a socket/connection and returns a handle.
 func Register(val interface{}) int32 {
-	RegistryMut.Lock()
-	defer RegistryMut.Unlock()
-	NextHandle++
-	Registry.Store(NextHandle, val)
-	return NextHandle
+	handle := NextHandle.Add(1)
+	Registry.Store(handle, val)
+	return handle
 }
 
 // Get retrieves a value from the registry.

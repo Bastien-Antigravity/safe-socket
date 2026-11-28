@@ -19,9 +19,12 @@ package transports
 
 import (
 	"bufio"
+	"crypto/tls"
 	"encoding/binary"
 	"io"
 	"net"
+	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -31,18 +34,21 @@ const MaxPayloadSize = 64 * 1024 * 1024
 // FramedTCPSocket implements interfaces.TransportConnection.
 // It uses a 4-byte BigEndian length header for every write.
 type FramedTCPSocket struct {
-	Conn        net.Conn
-	reader      *bufio.Reader
-	idleTimeout time.Duration
+	Conn                net.Conn
+	reader              *bufio.Reader
+	idleTimeoutNs       atomic.Int64
+	customReadDeadline  atomic.Bool
+	customWriteDeadline atomic.Bool
+	writeMu             sync.Mutex
 }
 
 // -----------------------------------------------------------------------------
 
 func NewFramedTCPSocket(conn net.Conn, timeout time.Duration) *FramedTCPSocket {
 	s := &FramedTCPSocket{
-		Conn:        conn,
-		idleTimeout: timeout,
+		Conn: conn,
 	}
+	s.idleTimeoutNs.Store(int64(timeout))
 
 	if conn != nil {
 		s.reader = bufio.NewReader(conn)
@@ -54,20 +60,24 @@ func NewFramedTCPSocket(conn net.Conn, timeout time.Duration) *FramedTCPSocket {
 }
 
 func (s *FramedTCPSocket) refreshReadDeadline() {
-	if s.idleTimeout > 0 && s.Conn != nil {
-		_ = s.Conn.SetReadDeadline(time.Now().Add(s.idleTimeout))
+	timeout := time.Duration(s.idleTimeoutNs.Load())
+	if timeout > 0 && s.Conn != nil && !s.customReadDeadline.Load() {
+		_ = s.Conn.SetReadDeadline(time.Now().Add(timeout))
 	}
 }
 
 func (s *FramedTCPSocket) refreshWriteDeadline() {
-	if s.idleTimeout > 0 && s.Conn != nil {
-		_ = s.Conn.SetWriteDeadline(time.Now().Add(s.idleTimeout))
+	timeout := time.Duration(s.idleTimeoutNs.Load())
+	if timeout > 0 && s.Conn != nil && !s.customWriteDeadline.Load() {
+		_ = s.Conn.SetWriteDeadline(time.Now().Add(timeout))
 	}
 }
 
 // SetIdleTimeout updates the internal idle timeout and refreshes current deadlines.
 func (s *FramedTCPSocket) SetIdleTimeout(d time.Duration) error {
-	s.idleTimeout = d
+	s.idleTimeoutNs.Store(int64(d))
+	s.customReadDeadline.Store(false)
+	s.customWriteDeadline.Store(false)
 	if s.Conn == nil {
 		return nil
 	}
@@ -83,12 +93,26 @@ func (s *FramedTCPSocket) SetIdleTimeout(d time.Duration) error {
 
 // -----------------------------------------------------------------------------
 
-// SetKeepAlive enables TCP keepalive with the specified period.
-func (s *FramedTCPSocket) SetKeepAlive(period time.Duration) error {
+func (s *FramedTCPSocket) underlyingTCPConn() *net.TCPConn {
 	if s.Conn == nil {
 		return nil
 	}
 	if tcpConn, ok := s.Conn.(*net.TCPConn); ok {
+		return tcpConn
+	}
+	if tlsConn, ok := s.Conn.(*tls.Conn); ok {
+		if tcpConn, ok := tlsConn.NetConn().(*net.TCPConn); ok {
+			return tcpConn
+		}
+	}
+	return nil
+}
+
+// -----------------------------------------------------------------------------
+
+// SetKeepAlive enables TCP keepalive with the specified period.
+func (s *FramedTCPSocket) SetKeepAlive(period time.Duration) error {
+	if tcpConn := s.underlyingTCPConn(); tcpConn != nil {
 		if err := tcpConn.SetKeepAlive(true); err != nil {
 			return err
 		}
@@ -101,10 +125,7 @@ func (s *FramedTCPSocket) SetKeepAlive(period time.Duration) error {
 
 // SetNoDelay controls Nagle's algorithm (true = disable Nagle, lower latency).
 func (s *FramedTCPSocket) SetNoDelay(enabled bool) error {
-	if s.Conn == nil {
-		return nil
-	}
-	if tcpConn, ok := s.Conn.(*net.TCPConn); ok {
+	if tcpConn := s.underlyingTCPConn(); tcpConn != nil {
 		return tcpConn.SetNoDelay(enabled)
 	}
 	return nil
@@ -114,10 +135,7 @@ func (s *FramedTCPSocket) SetNoDelay(enabled bool) error {
 
 // SetReadBuffer sets the size of the operating system's receive buffer.
 func (s *FramedTCPSocket) SetReadBuffer(bytes int) error {
-	if s.Conn == nil {
-		return nil
-	}
-	if tcpConn, ok := s.Conn.(*net.TCPConn); ok {
+	if tcpConn := s.underlyingTCPConn(); tcpConn != nil {
 		return tcpConn.SetReadBuffer(bytes)
 	}
 	return nil
@@ -127,10 +145,7 @@ func (s *FramedTCPSocket) SetReadBuffer(bytes int) error {
 
 // SetWriteBuffer sets the size of the operating system's transmit buffer.
 func (s *FramedTCPSocket) SetWriteBuffer(bytes int) error {
-	if s.Conn == nil {
-		return nil
-	}
-	if tcpConn, ok := s.Conn.(*net.TCPConn); ok {
+	if tcpConn := s.underlyingTCPConn(); tcpConn != nil {
 		return tcpConn.SetWriteBuffer(bytes)
 	}
 	return nil
@@ -140,6 +155,9 @@ func (s *FramedTCPSocket) SetWriteBuffer(bytes int) error {
 
 // SetDeadline sets the read and write deadlines associated with the connection.
 func (s *FramedTCPSocket) SetDeadline(t time.Time) error {
+	isCustom := !t.IsZero()
+	s.customReadDeadline.Store(isCustom)
+	s.customWriteDeadline.Store(isCustom)
 	if s.Conn == nil {
 		return nil
 	}
@@ -150,6 +168,7 @@ func (s *FramedTCPSocket) SetDeadline(t time.Time) error {
 
 // SetReadDeadline sets the deadline for future Read calls.
 func (s *FramedTCPSocket) SetReadDeadline(t time.Time) error {
+	s.customReadDeadline.Store(!t.IsZero())
 	if s.Conn == nil {
 		return nil
 	}
@@ -160,6 +179,7 @@ func (s *FramedTCPSocket) SetReadDeadline(t time.Time) error {
 
 // SetWriteDeadline sets the deadline for future Write calls.
 func (s *FramedTCPSocket) SetWriteDeadline(t time.Time) error {
+	s.customWriteDeadline.Store(!t.IsZero())
 	if s.Conn == nil {
 		return nil
 	}
@@ -168,25 +188,84 @@ func (s *FramedTCPSocket) SetWriteDeadline(t time.Time) error {
 
 // -----------------------------------------------------------------------------
 
-// Write prepends length and writes data.
+// Write prepends the 4-byte length header and transmits the full frame in a single
+// synchronized write. Small frames (<= 508 bytes, including 0-byte heartbeats) use a
+// stack buffer for zero heap allocations; large cleartext TCP frames use scatter-gather
+// writev(2) via net.Buffers; TLS frames coalesce into a single record buffer.
+// If writing fails partway, the connection is closed immediately so partial frames
+// can never desynchronize the stream.
 func (s *FramedTCPSocket) Write(p []byte) (n int, err error) {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+
 	s.refreshWriteDeadline()
 	if s.Conn == nil {
 		return 0, io.ErrClosedPipe
 	}
 
-	// 1. Prepare Header (4 bytes length)Endian)
-	header := make([]byte, 4)
-	binary.BigEndian.PutUint32(header, uint32(len(p)))
+	payloadLen := len(p)
 
-	// 2. Write Header
-	_, err = s.Conn.Write(header)
-	if err != nil {
-		return 0, err
+	// Fast Path 1: Small frames (<= 508B, including 0B heartbeats) use stack allocation (0 B/op)
+	if payloadLen <= 508 {
+		var stackBuf [512]byte
+		frame := stackBuf[:4+payloadLen]
+		binary.BigEndian.PutUint32(frame[:4], uint32(payloadLen))
+		if payloadLen > 0 {
+			copy(frame[4:], p)
+		}
+		totalWritten := 0
+		for totalWritten < len(frame) {
+			w, err := s.Conn.Write(frame[totalWritten:])
+			if err != nil {
+				_ = s.Conn.Close()
+				return 0, err
+			}
+			if w == 0 {
+				_ = s.Conn.Close()
+				return 0, io.ErrShortWrite
+			}
+			totalWritten += w
+		}
+		return payloadLen, nil
 	}
 
-	// 3. Write Data (Zero-copy payload stream)
-	return s.Conn.Write(p)
+	// Fast Path 2: Large frames on cleartext *net.TCPConn use writev(2) scatter-gather (zero payload copy)
+	if _, isTCP := s.Conn.(*net.TCPConn); isTCP {
+		var header [4]byte
+		binary.BigEndian.PutUint32(header[:], uint32(payloadLen))
+		buffers := net.Buffers{header[:], p}
+		written, err := buffers.WriteTo(s.Conn)
+		if err != nil {
+			_ = s.Conn.Close()
+			return 0, err
+		}
+		if written != int64(4+payloadLen) {
+			_ = s.Conn.Close()
+			return 0, io.ErrShortWrite
+		}
+		return payloadLen, nil
+	}
+
+	// Path 3: Large frames on *tls.Conn or custom net.Conn coalesce into a single write call
+	frame := make([]byte, 4+payloadLen)
+	binary.BigEndian.PutUint32(frame[:4], uint32(payloadLen))
+	copy(frame[4:], p)
+
+	totalWritten := 0
+	for totalWritten < len(frame) {
+		w, err := s.Conn.Write(frame[totalWritten:])
+		if err != nil {
+			_ = s.Conn.Close()
+			return 0, err
+		}
+		if w == 0 {
+			_ = s.Conn.Close()
+			return 0, io.ErrShortWrite
+		}
+		totalWritten += w
+	}
+
+	return payloadLen, nil
 }
 
 // -----------------------------------------------------------------------------
@@ -243,17 +322,17 @@ func (s *FramedTCPSocket) Read(p []byte) (n int, err error) {
 // ReadMessage implements the dynamic read.
 // HEARTBEAT UPDATE: Automatically skips frames with length 0.
 func (s *FramedTCPSocket) ReadMessage() ([]byte, error) {
+	var header [4]byte
 	for {
 		s.refreshReadDeadline()
 		if s.Conn == nil || s.reader == nil {
 			return nil, io.EOF
 		}
-		// 1. Read Length
-		header := make([]byte, 4)
-		if _, err := io.ReadFull(s.reader, header); err != nil {
+		// 1. Read Length into stack-allocated array
+		if _, err := io.ReadFull(s.reader, header[:]); err != nil {
 			return nil, err
 		}
-		length := binary.BigEndian.Uint32(header)
+		length := binary.BigEndian.Uint32(header[:])
 
 		// OOM PROTECTION: Reject oversized frames before allocation
 		if length > MaxPayloadSize {
